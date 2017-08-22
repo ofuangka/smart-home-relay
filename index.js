@@ -7,10 +7,6 @@
  * 	where PORT is the port to listen on,
  *  USERNAME and PASSWORD are the credentials to use when relaying to the z-way server
  */
-if (process.argv.length < 3) {
-	console.log('Usage: USERNAME=USERNAME PASSWORD=PASSWORD node ' + __filename + ' PORT');
-	process.exit(-1);
-}
 
 /**
  * cheap polyfill for Object.assign()
@@ -31,22 +27,19 @@ function assign(target) {
  * promise wrapper for http
  */
 function httpPromise(options, postData) {
-	return new Promise(function (resolve, reject) {
-		var outRequest = http.request(options, function (outResponse) {
+	return new Promise((resolve, reject) => {
+		var outRequest = http.request((options, outResponse) => {
 			var data = '';
-			outResponse.on('data', function (chunk) {
-				data += chunk;
-			});
-			outResponse.on('end', function () {
+			outResponse.on('data', chunk => data += chunk);
+			outResponse.on('end', () => {
 				resolve({
+					statusCode: outResponse.statusCode,
 					headers: outResponse.headers,
 					responseText: data
 				});
 			});
 		});
-		outRequest.on('error', function (error) {
-			reject(error);
-		});
+		outRequest.on('error', error => reject(error));
 		if (postData !== undefined) {
 			outRequest.write(postData);
 		}
@@ -59,60 +52,106 @@ function get(path, options) {
 function post(path, postData, options) {
 	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
 }
-/**
- * authenticated get()
- */
-function authGet(path) {
 
-	/* this makes a post request with credentials to get an authenticated session before the get request */
-	return post(ZWAY + '/login', JSON.stringify({ login: USERNAME, password: PASSWORD }), OPTIONS).then(function (response) {
-		var sid = JSON.parse(response.responseText).data.sid;
-		return get(ZWAY + path, assign({ headers: { ZWAYSession: sid } }, OPTIONS));
+(function main() {
+
+	/**
+	 * Gets a z-way session ID using the USERNAME and PASSWORD
+	 */
+	function getSession() {
+		var fullPath = `${ZWAY}/login`;
+		return post(fullPath, JSON.stringify({ login: USERNAME, password: PASSWORD }), getOptions())
+			.then(response => JSON.parse(response.responseText).data.sid);
+	}
+
+	/**
+	 * Returns options for http
+	 * 
+	 * @param {boolean} includeSid Whether to include the sid 
+	 */
+	function getOptions(includeSid) {
+		return includeSid ? assign({ headers: { ZWAYSession: sid } }, OPTIONS) : OPTIONS;
+	}
+
+	/**
+	 * Opens a session and uses that session to make a GET request
+	 * 
+	 * @param {string} path The request path 
+	 */
+	function authGet(path) {
+		return getSession()
+			.then(_sid => {
+				sid = _sid;
+			})
+			.then(() => get(path, getOptions(true)));
+	}
+
+	/**
+	 * Attempts to make a GET request using an existing session ID. If the attempt 
+	 * fails with a 401 unauthorized, attempts to start a new session and then 
+	 * make the same GET request
+	 * 
+	 * @param {string} path The request path 
+	 */
+	function zwayGet(path) {
+		var fullPath = `${ZWAY}${path}`;
+		if (sid) {
+			return get(fullPath, getOptions(true))
+				.then(response => {
+					if (response.statusCode === 401) {
+						return authGet(fullPath);
+					}
+					return response;
+				});
+		}
+		return authGet(fullPath);
+	}
+	if (process.argv.length < 3) {
+		console.log(`Usage: USERNAME=USERNAME PASSWORD=PASSWORD node ${__filename} PORT`);
+		process.exit(-1);
+	}
+	const PORT = process.argv[2],
+		USERNAME = process.env.USERNAME,
+		PASSWORD = process.env.PASSWORD,
+		ZWAY = '/ZAutomation/api/v1',
+		OPTIONS = {
+			port: 8083
+		};
+
+	var express = require('express'),
+		bodyParser = require('body-parser'),
+		http = require('http'),
+		server = express(),
+		sid;
+
+	server.use(bodyParser.json());
+	server.use(bodyParser.urlencoded({ extended: true }));
+
+	/* express get handler */
+	server.get('/devices', function (inRequest, inResponse) {
+		console.log('GET request for /devices received');
+
+		/* make a request to the z way server */
+		zwayGet('/devices')
+			.then(response => {
+				var devices = JSON.parse(response.responseText).data.devices;
+				inResponse.send(JSON.stringify(devices));
+			})
+			.catch(error => inResponse.send(JSON.stringify({ error: error })));
 	});
-}
-var express = require('express')
-	bodyParser = require('body-parser'),
-	http = require('http'),
-	Promise = require('promise');
 
-const OPTIONS = {
-	port: 8083
-},
-	PORT = process.argv[2],
-	USERNAME = process.env.USERNAME,
-	PASSWORD = process.env.PASSWORD,
-	ZWAY = '/ZAutomation/api/v1';
+	/* express put handler */
+	server.put('/devices/:deviceId', (inRequest, inResponse) => {
+		console.log(`PUT request for /devices/${inRequest.params.deviceId} received`);
 
-var server = express();
-server.use(bodyParser.json());
-server.use(bodyParser.urlencoded({ extended: true }));
+		var command = (inRequest.body.level === 'on') ? 'on' : 'off';
 
-/* express get handler */
-server.get('/devices', function (inRequest, inResponse) {
-	console.log('GET request for /devices received');
-
-	/* make a request to the z way server */
-	authGet('/devices').then(function (response) {
-		var devices = JSON.parse(response.responseText).data.devices;
-		inResponse.send(JSON.stringify(devices));
-	}).catch(function (error) {
-		inResponse.send(JSON.stringify({ error: error }));
+		/* make a request to the z-way server */
+		zwayGet(`/devices/${inRequest.params.deviceId}/command/${command}`)
+			.then(response => inResponse.send(JSON.stringify({ code: 200, message: '200 OK' })))
+			.catch(error => inResponse.send(JSON.stringify({ error: error })));
 	});
-});
 
-/* express put handler */
-server.put('/devices/:deviceId', function (inRequest, inResponse) {
-	console.log('PUT request for /devices/' + inRequest.params.deviceId + ' received');
-
-	var command = (inRequest.body.level === 'on') ? 'on' : 'off';
-
-	/* make a request to the z-way server */
-	authGet('/devices/' + inRequest.params.deviceId + '/command/' + command).then(function (response) {
-		inResponse.send(JSON.stringify({ code: 200, message: '200 OK' }));
-	}).catch(function (error) {
-		inResponse.send(JSON.stringify({ error: error }));
-	});
-});
-
-http.createServer(server).listen(PORT);
-console.log('Server listening on port ' + PORT);
+	http.createServer(server).listen(PORT);
+	console.log(`Server listening on port ${PORT}`);
+})();
