@@ -123,8 +123,8 @@ function post(path, postData, options) {
 	const PORT = process.argv[2],
 		USERNAME = process.env.USERNAME,
 		PASSWORD = process.env.PASSWORD,
-		TV_SERVER_HOST = process.env.TV_SERVER_HOST,
-		TV_SERVER_POST = process.env.TV_SERVER_PORT,
+		TV_SERVER_HOST = process.argv[3],
+		TV_SERVER_POST = process.argv[4],
 		ZWAY = '/ZAutomation/api/v1',
 		OPTIONS = {
 			port: 8083
@@ -175,7 +175,7 @@ function post(path, postData, options) {
 		var command = (inRequest.body.level === 'on') ? 'on' : 'off';
 
 		if (isTvRequest(inRequest)) {
-			post('/', { host: TV_SERVER_HOST, port: TV_SERVER_POST })
+			post('/', command, { host: TV_SERVER_HOST, port: TV_SERVER_POST })
 				.then(response => inResponse.status(200).send(JSON.stringify({ code: 200, message: '200 OK' })))
 				.catch(error => inResponse.status(500).send(JSON.stringify({ error: error })));
 		} else {
