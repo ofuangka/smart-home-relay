@@ -54,6 +54,10 @@ function post(path, postData, options) {
 	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
 }
 
+var express = require('express'),
+	bodyParser = require('body-parser'),
+	http = require('http');
+
 (function main() {
 
 	/**
@@ -81,9 +85,7 @@ function post(path, postData, options) {
 	 */
 	function authGet(path) {
 		return getSession()
-			.then(_sid => {
-				sid = _sid;
-			})
+			.then(_sid => sid = _sid)
 			.then(() => get(path, getOptions(true)));
 	}
 
@@ -144,10 +146,7 @@ function post(path, postData, options) {
 			}
 		};
 
-	var express = require('express'),
-		bodyParser = require('body-parser'),
-		http = require('http'),
-		server = express(),
+	var server = express(),
 		sid;
 
 	server.use(bodyParser.json());
