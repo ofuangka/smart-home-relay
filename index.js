@@ -29,7 +29,7 @@ function assign(target) {
  */
 function httpPromise(options, postData) {
 	return new Promise((resolve, reject) => {
-		var outRequest = http.request((options, outResponse) => {
+		var outRequest = http.request(options, outResponse => {
 			var data = '';
 			outResponse.on('data', chunk => data += chunk);
 			outResponse.on('end', () => {
