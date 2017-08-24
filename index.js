@@ -98,6 +98,20 @@ var express = require('express'),
 		return request.params.deviceId === TV.id || request.params.deviceId === TELEVISION.id;
 	}
 
+	function isRokuRequest(request) {
+		return request.params.deviceId === ROKU.id;
+	}
+
+	function handleTvRequest(inRequest, inResponse) {
+		post('/', command, { host: TV_SERVER_HOST, port: TV_SERVER_POST })
+			.then(response => inResponse.status(200).send(JSON.stringify({ code: 200, message: '200 OK' })))
+			.catch(error => inResponse.status(500).send(JSON.stringify({ error: error })));
+	}
+
+	function handleRokuRequest(inRequest, inResponse) {
+		inResponse.status(500).send(JSON.stringify({ error: 'To be implemented' }));
+	}
+
 	/**
 	 * Attempts to make a GET request using an existing session ID. If the attempt 
 	 * fails with a 401 unauthorized, attempts to start a new session and then 
@@ -133,16 +147,23 @@ var express = require('express'),
 		},
 		TV = {
 			id: 'tv',
+			deviceType: 'television',
 			metrics: {
-				title: 'TV',
-				level: 'off'
+				title: 'TV'
 			}
 		},
 		TELEVISION = {
 			id: 'television',
+			deviceType: 'television',
 			metrics: {
-				title: 'Television',
-				level: 'off'
+				title: 'Television'
+			}
+		},
+		ROKU = {
+			id: 'roku',
+			deviceType: 'roku',
+			metrics: {
+				title: 'Roku'
 			}
 		};
 
@@ -174,10 +195,11 @@ var express = require('express'),
 		var command = (inRequest.body.level === 'on') ? 'on' : 'off';
 
 		if (isTvRequest(inRequest)) {
-			post('/', command, { host: TV_SERVER_HOST, port: TV_SERVER_POST })
-				.then(response => inResponse.status(200).send(JSON.stringify({ code: 200, message: '200 OK' })))
-				.catch(error => inResponse.status(500).send(JSON.stringify({ error: error })));
+			handleTvRequest(inRequest, inResponse);
+		} else if (isRokuRequest(inRequest)) {
+			handleRokuRequest(inRequest, inResponse);
 		} else {
+
 			/* make a request to the z-way server */
 			zwayGet(`/devices/${inRequest.params.deviceId}/command/${command}`)
 				.then(response => inResponse.status(200).send(JSON.stringify({ code: 200, message: '200 OK' })))
