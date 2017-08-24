@@ -183,6 +183,7 @@ var express = require('express'),
 				var devices = JSON.parse(response.responseText).data.devices;
 				devices.push(TV);
 				devices.push(TELEVISION);
+				devices.push(ROKU);
 				inResponse.status(200).send(JSON.stringify(devices));
 			})
 			.catch(error => inResponse.status(500).send(JSON.stringify({ error: error })));
