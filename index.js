@@ -39,7 +39,10 @@ const ZWAY = '/ZAutomation/api/v1',
 		}
 	};
 
-var server = express(),
+var express = require('express'),
+	bodyParser = require('body-parser'),
+	http = require('http'),
+	server = express(),
 	port = process.argv[2],
 	username = process.env.USERNAME,
 	password = process.env.PASSWORD,
@@ -105,10 +108,6 @@ function handleRokuChangeChannelRequest(inRequest, inResponse) {
 	console.log(`RokuChangeChannelRequest: ${inRequest}`);
 	inResponse.status(500).send(JSON.stringify({ error: 'Not yet implemented' }));
 }
-
-var express = require('express'),
-	bodyParser = require('body-parser'),
-	http = require('http');
 
 /**
  * Gets a z-way session ID using the USERNAME and PASSWORD
