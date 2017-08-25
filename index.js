@@ -153,6 +153,7 @@ function isRokuRequest(request) {
 }
 
 function handleTvPowerRequest(inRequest, inResponse) {
+	var command = 'Sharp KEY_POWER';
 	post('/', command, { host: tvServerHost, port: tvServerPort })
 		.then(response => inResponse.status(200).send(JSON.stringify({ code: 200, message: '200 OK' })))
 		.catch(error => inResponse.status(500).send(JSON.stringify({ error: error })));
@@ -202,7 +203,7 @@ server.get('/devices', function (inRequest, inResponse) {
 server.put('/devices/:deviceId', (inRequest, inResponse) => {
 	console.log(`PUT request for /devices/${inRequest.params.deviceId} received`);
 
-	var command = (inRequest.body.level === 'on') ? 'on' : 'off';
+	var command = (inRequest.body.powerState === 'ON') ? 'on' : 'off';
 
 	if (isTvRequest(inRequest)) {
 		handleTvPowerRequest(inRequest, inResponse);
