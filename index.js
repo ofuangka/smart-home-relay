@@ -109,12 +109,15 @@ function httpPromise(options, postData) {
 	});
 }
 function get(path, options) {
+	verbose(`GET ${path}`);
 	return httpPromise(assign({ method: 'GET', path: path }, options));
 }
 function put(path, options, postData) {
+	verbose(`PUT ${path} ${postData}`);
 	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
 }
 function post(path, options, postData) {
+	verbose(`POST ${path} ${postData}`);
 	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
 }
 
@@ -235,7 +238,6 @@ function handleTvPowerRequest(inRequest, inResponse) {
 function sendIrCommand(key, endpointId) {
 	var irPath = `/receivers/${endpointId}/command`,
 		postData = JSON.stringify({ key: key });
-	verbose(`POST ${irPath} ${postData}`);
 	return post(irPath, getIrOptions(postData), postData);
 }
 
@@ -357,8 +359,8 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	zWayGet('/devices')
 		.then(zWayResponse => {
 			verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
-			var zWayEndpoints = JSON.parse(zWayResponse.responseText).data.devices.
-				filter(zWayDevice => isZWayDeviceValid)
+			var zWayEndpoints = JSON.parse(zWayResponse.responseText).data.devices
+				.filter(isZWayDeviceValid)
 				.map(zWayDevice => {
 					return {
 						id: zWayDevice.id,
