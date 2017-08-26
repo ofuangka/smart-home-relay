@@ -18,9 +18,7 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		accept: '*/*',
 		'Content-Type': 'application/json'
 	},
-	DEFAULT_OPTIONS = {
-		port: 8083
-	},
+	Z_WAY_PORT = 8083,
 	TV = {
 		id: 'tv',
 		type: 'television',
@@ -173,6 +171,7 @@ function getZWaySession() {
  */
 function getZWayOptions(includeSid, postData) {
 	var ret = getOptions(postData);
+	ret.port = Z_WAY_PORT;
 	if (includeSid) {
 		ret.headers.ZWAYSession = sid;
 	}
@@ -224,7 +223,7 @@ function handleTvPowerRequest(inRequest, inResponse) {
 		powerState = inRequest.body.state,
 		key = TV_KEYS.power;
 	sendIrCommand(key, endpointId)
-		.then(tvResponse => sendSuccess(inResponse, {
+		.then(irResponse => sendSuccess(inResponse, {
 			state: powerState,
 			isoTimestamp: now(),
 			uncertaintyMs: 0
@@ -233,7 +232,7 @@ function handleTvPowerRequest(inRequest, inResponse) {
 }
 
 function sendIrCommand(key, endpointId) {
-	
+
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/command`,
 		postData = JSON.stringify({ key: key });
