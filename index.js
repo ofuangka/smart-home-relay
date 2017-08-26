@@ -233,7 +233,9 @@ function handleTvPowerRequest(inRequest, inResponse) {
 }
 
 function sendIrCommand(key, endpointId) {
-	var irPath = `/receivers/${endpointId}/command`,
+	
+	/* TODO: don't hardcode the receiverId */
+	var irPath = `/receivers/Sharp/command`,
 		postData = JSON.stringify({ key: key });
 	return post(irPath, getIrOptions(postData), postData);
 }
@@ -255,8 +257,7 @@ function irRepeat(key, endpointId, times) {
 }
 
 function handleTvVolumeRequest(inRequest, inResponse) {
-	var endpointId = getEndpointId(inRequest),
-		volumeSteps = inRequest.body.volumeSteps,
+	var volumeSteps = inRequest.body.volumeSteps,
 		mute = inRequest.body.mute;
 
 	/* no way to determine status, just return a success */
