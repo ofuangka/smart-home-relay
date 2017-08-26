@@ -164,7 +164,7 @@ function verbose(message) {
  */
 function getZWaySession() {
 	var fullPath = `${Z_WAY_PATH_PREFIX}/login`;
-	return post(fullPath, JSON.stringify({ login: username, password: password }), getZWayOptions())
+	return post(fullPath, getZWayOptions(), JSON.stringify({ login: username, password: password }))
 		.then(response => JSON.parse(response.responseText).data.sid);
 }
 
