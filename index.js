@@ -163,8 +163,9 @@ function verbose(message) {
  * Gets a z-way session ID using the USERNAME and PASSWORD
  */
 function getZWaySession() {
-	var fullPath = `${Z_WAY_PATH_PREFIX}/login`;
-	return post(fullPath, getZWayOptions(), JSON.stringify({ login: username, password: password }))
+	var fullPath = `${Z_WAY_PATH_PREFIX}/login`,
+		postData = JSON.stringify({ login: username, password: password });
+	return post(fullPath, getZWayOptions(false, postData), postData)
 		.then(response => JSON.parse(response.responseText).data.sid);
 }
 
@@ -371,13 +372,14 @@ server.get('/endpoints', (inRequest, inResponse) => {
 					};
 				})
 			endpoints.concat(zWayEndpoints);
+			return endpoints;
 		})
 		.catch(error => {
 			console.log(`z-way device discovery error: ${JSON.stringify(error)}`);
 		})
 
 		/* even if there was an error, we reply with the static endpoints */
-		.then(sendSuccess(inResponse, endpoints));
+		.then(() => sendSuccess(inResponse, endpoints));
 });
 
 /* express put handler */
