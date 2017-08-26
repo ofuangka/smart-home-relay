@@ -1,12 +1,12 @@
 /**
- * this script creates an express server that handles GET requests to /devices and 
- * PUT requests to /devices/:deviceId. /devices gets relayed as a device list request 
+ * this script creates an express server that handles GET requests to /endpoints and 
+ * PUT requests to /endpoints/:endpointId/:resource. /endpoints gets relayed as a device list request 
  * on the z-way network, and the device specific PUT request relays the request to the z-way server 
  * 
- * Usage: USERNAME=USERNAME PASSWORD=PASSWORD node index.js PORT TV_SERVER_HOST TV_SERVER_PORT
+ * Usage: USERNAME=USERNAME PASSWORD=PASSWORD node index.js PORT IR_SERVER_HOST IR_SERVER_PORT
  * 	where PORT is the port to listen on,
  *  USERNAME and PASSWORD are the credentials to use when relaying to the z-way server, 
- *  and IR_SERVER_HOST IR_SERVER_PORT are the host and port are the TV server and port
+ *  and IR_SERVER_HOST IR_SERVER_PORT are the IR server and port
  */
 if (process.argv.length < 5) {
 	console.log(`Usage: USERNAME=USERNAME PASSWORD=PASSWORD node ${__filename} PORT IR_SERVER_HOST IR_SERVER_PORT`);
@@ -127,10 +127,6 @@ function waitFor(ms) {
 
 function pause() {
 	return waitFor(PAUSE_MS);
-}
-
-function handleRokuPowerRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
 }
 
 function handleTvChannelRequest(inRequest, inResponse) {
@@ -297,15 +293,11 @@ function logRequest(inRequest) {
 	console.log(`${inRequest.method} request for ${inRequest.path} received`);
 }
 
-function getEndpoint(resource) {
-	return `/endpoints/:endpointId/${resource}`;
-}
-
 function getRequestResource(inRequest) {
 	return inRequest.path.substr(inRequest.path.lastIndexOf('/'));
 }
 
-function sendUnsupportedDeviceError(inRequest, inResponse) {
+function sendUnsupportedDeviceOperationError(inRequest, inResponse) {
 	sendError(inResponse, `Endpoint ${getEndpointId(inRequest)} does not support ${getRequestResource(inRequest)}`);
 }
 
@@ -340,6 +332,50 @@ function isZWayDeviceValid(zWayDevice) {
 		&& zWayDevice.metrics
 		&& zWayDevice.metrics.title
 		&& zWayDevice.deviceType;
+}
+
+function isPowerRequest(inRequest) {
+	return getRequestResource(inRequest) === SUPPORTED_RESOURCES.power;
+}
+
+function getRequestResource(inRequest) {
+	return inRequest.params.resourceId;
+}
+
+function handleTvRequest(inRequest, inResponse) {
+	var resource = getRequestResource(inRequest);
+	switch (resource) {
+		case SUPPORTED_RESOURCES.power:
+			handleTvPowerRequest(inRequest, inResponse);
+			break;
+		case SUPPORTED_RESOURCES.channel:
+			handleTvChannelRequest(inRequest, inResponse);
+			break;
+		case SUPPORTED_RESOURCES.playback:
+			handleTvPlaybackRequest(inRequest, inResponse);
+			break;
+		case SUPPORTED_RESOURCES.volume:
+			handleTvVolumeRequest(inRequest, inResponse);
+			break;
+		default:
+			sendUnsupportedDeviceOperationError(inRequest, inResponse);
+			break;
+	}
+}
+
+function handleRokuRequest(inRequest, inResponse) {
+	var resource = getRequestResource(inRequest);
+	switch (resource) {
+		case SUPPORTED_RESOURCES.channel:
+			handleRokuChannelRequest(inRequest, inResponse);
+			break;
+		case SUPPORTED_RESOURCES.playback:
+			handleRokuPlaybackRequest(inRequest, inResponse);
+			break;
+		default:
+			sendUnsupportedDeviceOperationError(inRequest, inResponse);
+			break;
+	}
 }
 
 server.use(bodyParser.json());
@@ -384,18 +420,18 @@ server.get('/endpoints', (inRequest, inResponse) => {
 });
 
 /* express put handler */
-server.put(getEndpoint(SUPPORTED_RESOURCES.power), (inRequest, inResponse) => {
+server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	logRequest(inRequest);
 	if (isTvRequest(inRequest)) {
-		handleTvPowerRequest(inRequest, inResponse);
+		handleTvRequest(inRequest, inResponse);
 	} else if (isRokuRequest(inRequest)) {
-		sendUnsupportedDeviceError(inRequest, inResponse);
-	} else {
+		handleRokuRequest(inRequest, inResponse);
+	} else if (isPowerRequest(isRequest)) {
 
 		/* make a request to the z-way server */
 		var powerState = inRequest.body.state;
 
-		zWayGet(`/devices/${deviceId}/command/${powerState}`)
+		zWayGet(`/devices/${getEndpointId(inRequest)}/command/${powerState}`)
 			.then(zWayResponse => {
 				verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
 				return sendSuccess(inResponse, {
@@ -405,48 +441,8 @@ server.put(getEndpoint(SUPPORTED_RESOURCES.power), (inRequest, inResponse) => {
 				});
 			})
 			.catch(error => sendError(inResponse, error));
-	}
-});
-
-server.put(getEndpoint(SUPPORTED_RESOURCES.channel), (inRequest, inResponse) => {
-	logRequest(inRequest);
-	if (isTvRequest(inRequest)) {
-		handleTvChannelRequest(inRequest, inResponse);
-	} else if (isRokuRequest(inRequest)) {
-		handleRokuChannelRequest(inRequest, inResponse);
 	} else {
-		sendUnsupportedDeviceError(inRequest, inResponse);
-	}
-
-});
-
-server.put(getEndpoint(SUPPORTED_RESOURCES.volume), (inRequest, inResponse) => {
-	logRequest(inRequest);
-	if (isTvRequest(inRequest)) {
-		handleTvVolumeRequest(inRequest, inResponse);
-	} else {
-		sendUnsupportedDeviceError(inRequest, inResponse);
-	}
-
-});
-
-server.put(getEndpoint(SUPPORTED_RESOURCES.input), (inRequest, inResponse) => {
-	logRequest(inRequest);
-	if (isTvRequest(inRequest)) {
-		handleTvInputRequest(inRequest, inResponse);
-	} else {
-		sendUnsupportedDeviceError(inRequest, inResponse);
-	}
-});
-
-server.put(getEndpoint(SUPPORTED_RESOURCES.playback), (inRequest, inResponse) => {
-	logRequest(inRequest);
-	if (isTvRequest(inRequest)) {
-		handleTvPlaybackRequest(inRequest, inResponse);
-	} else if (isRokuRequest(inRequest)) {
-		handleRokuPlaybackRequest(inRequest, inResponse);
-	} else {
-		sendUnsupportedDeviceError(inRequest, inResponse);
+		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
 });
 
