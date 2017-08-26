@@ -426,7 +426,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		handleTvRequest(inRequest, inResponse);
 	} else if (isRokuRequest(inRequest)) {
 		handleRokuRequest(inRequest, inResponse);
-	} else if (isPowerRequest(isRequest)) {
+	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the z-way server */
 		var powerState = inRequest.body.state;
