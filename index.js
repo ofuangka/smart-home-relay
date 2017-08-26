@@ -365,9 +365,9 @@ server.get('/endpoints', (inRequest, inResponse) => {
 				.map(zWayDevice => {
 					return {
 						id: zWayDevice.id,
-						name: zWayDevice.metrics.name,
-						description: zWayDevice.metrics.name,
-						manufacturer: zWayDevice.metrics.name,
+						name: zWayDevice.metrics.title,
+						description: zWayDevice.metrics.title,
+						manufacturer: zWayDevice.metrics.title,
 						type: zWayDevice.deviceType
 					};
 				});
