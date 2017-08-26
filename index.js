@@ -236,7 +236,7 @@ function sendIrCommand(key, endpointId) {
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/command`,
 		postData = JSON.stringify({ key: key });
-	return post(irPath, getIrOptions(postData), postData);
+	return put(irPath, getIrOptions(postData), postData);
 }
 
 function irRepeat(key, endpointId, times) {
