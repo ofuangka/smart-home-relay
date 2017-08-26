@@ -359,7 +359,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	/* make a request to the z way server */
 	zWayGet('/devices')
 		.then(zWayResponse => {
-			verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
+			verbose(`zWayResponse(${JSON.stringify(zWayResponse)})`);
 			var zWayEndpoints = JSON.parse(zWayResponse.responseText).data.devices
 				.filter(isZWayDeviceValid)
 				.map(zWayDevice => {
@@ -370,8 +370,9 @@ server.get('/endpoints', (inRequest, inResponse) => {
 						manufacturer: zWayDevice.metrics.name,
 						type: zWayDevice.deviceType
 					};
-				})
-			endpoints.concat(zWayEndpoints);
+				});
+			verbose(`zWayEndpoints(${JSON.stringify(zWayEndpoints)})`);
+			endpoints = endpoints.concat(zWayEndpoints);
 			return endpoints;
 		})
 		.catch(error => {
