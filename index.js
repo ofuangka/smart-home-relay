@@ -223,11 +223,13 @@ function handleTvPowerRequest(inRequest, inResponse) {
 		powerState = inRequest.body.state,
 		key = TV_KEYS.power;
 	sendIrCommand(key, endpointId)
-		.then(irResponse => sendSuccess(inResponse, {
-			state: powerState,
-			isoTimestamp: now(),
-			uncertaintyMs: 0
-		}))
+		.then(irResponse =>
+			sendSuccess(inResponse, {
+				state: powerState,
+				isoTimestamp: now(),
+				uncertaintyMs: 0
+			})
+		)
 		.catch(error => sendError(inResponse, error));
 }
 
@@ -236,7 +238,13 @@ function sendIrCommand(key, endpointId) {
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/command`,
 		postData = JSON.stringify({ key: key });
-	return put(irPath, getIrOptions(postData), postData);
+	return put(irPath, getIrOptions(postData), postData)
+		.then(irResponse => {
+			if (irResponse.statusCode === 200) {
+				return irResponse;
+			}
+			throw new Error(`Received failed statusCode: ${irResponse.statusCode}`);
+		});
 }
 
 function irRepeat(key, endpointId, times) {
@@ -251,7 +259,7 @@ function irRepeat(key, endpointId, times) {
 	} else {
 		return sendIrCommand(key, endpointId)
 			.then(pause)
-			.then(irRepeat(key, endpointId, times - 1));
+			.then(() => irRepeat(key, endpointId, times - 1));
 	}
 }
 
