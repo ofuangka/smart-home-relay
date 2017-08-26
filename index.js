@@ -290,7 +290,7 @@ function getEndpointId(inRequest) {
 }
 
 function logRequest(inRequest) {
-	verbose(`RECV ${JSON.stringify(inRequest)}`);
+	verbose(`RECV ${JSON.stringify(inRequest.body)}`);
 	console.log(`${inRequest.method} request for ${inRequest.path} received`);
 }
 
@@ -332,10 +332,10 @@ function now() {
 }
 
 function isZWayDeviceValid(zWayDevice) {
-	return zWayDevice 
-		&& zWayDevice.id 
-		&& zWayDevice.metrics 
-		&& zWayDevice.metrics.title 
+	return zWayDevice
+		&& zWayDevice.id
+		&& zWayDevice.metrics
+		&& zWayDevice.metrics.title
 		&& zWayDevice.deviceType;
 }
 
