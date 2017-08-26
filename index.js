@@ -44,6 +44,8 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		power: 'KEY_POWER',
 		volumeUp: 'KEY_VOLUMEUP',
 		volumeDown: 'KEY_VOLUMEDOWN',
+		channelUp: 'KEY_CHANNELUP',
+		channelDown: 'KEY_CHANNELDOWN',
 		mute: 'KEY_MUTE'
 	},
 	PAUSE_MS = 1000,
@@ -128,7 +130,23 @@ function pause() {
 }
 
 function handleTvChannelRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
+	var endpointId = getEndpointId(inRequest),
+		channel = inRequest.body;
+	if (typeof channel.channelCount === 'number') {
+
+		/* just send a success immediately */
+		sendSuccess(inResponse);
+		irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount))
+			.then(result => console.log(`ChannelSuccess: ${result}`))
+			.catch(error => console.error(`ChannelFailure: ${error}`));
+	} else {
+
+		/* TODO: implement */
+		console.log(`Unimplemented channel: ${JSON.stringify(channel)}`);
+		sendUnsupportedDeviceOperationError(inRequest, inResponse);
+	}
+
+
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
