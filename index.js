@@ -313,7 +313,7 @@ function sendUnsupportedDeviceError(inRequest, inResponse) {
  * 
  * @param {string} path The request path 
  */
-function zwayGet(path) {
+function zWayGet(path) {
 	var fullPath = `${Z_WAY_PATH_PREFIX}${path}`;
 	if (sid) {
 		return get(fullPath, getZWayOptions(true))
