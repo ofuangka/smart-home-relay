@@ -23,24 +23,24 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 	},
 	TV = {
 		id: 'tv',
-		deviceType: 'television',
-		metrics: {
-			title: 'TV'
-		}
+		type: 'television',
+		name: 'TV',
+		description: "Sharp AQUOS N6000U",
+		manufacturer: 'Sharp'
 	},
 	TELEVISION = {
 		id: 'television',
-		deviceType: 'television',
-		metrics: {
-			title: 'Television'
-		}
+		type: 'television',
+		name: 'Television',
+		description: "Sharp AQUOS N6000U",
+		manufacturer: 'Sharp'
 	},
 	ROKU = {
 		id: 'roku',
-		deviceType: 'roku',
-		metrics: {
-			title: 'Roku'
-		}
+		type: 'roku',
+		name: 'Roku',
+		description: 'Roku Streaming Stick 3600',
+		manufacturer: 'Roku'
 	},
 	TV_KEYS = {
 		power: 'KEY_POWER',
@@ -226,7 +226,8 @@ function handleTvPowerRequest(inRequest, inResponse) {
 	sendIrCommand(key, endpointId)
 		.then(tvResponse => sendSuccess(inResponse, {
 			state: powerState,
-			isoTimestamp: now()
+			isoTimestamp: now(),
+			uncertaintyMs: 0
 		}))
 		.catch(error => sendError(inResponse, error));
 }
@@ -330,6 +331,14 @@ function now() {
 	return new Date().toISOString();
 }
 
+function isZWayDeviceValid(zWayDevice) {
+	return zWayDevice 
+		&& zWayDevice.id 
+		&& zWayDevice.metrics 
+		&& zWayDevice.metrics.title 
+		&& zWayDevice.deviceType;
+}
+
 server.use(bodyParser.json());
 server.use(bodyParser.urlencoded({ extended: true }));
 
@@ -348,8 +357,18 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	zWayGet('/devices')
 		.then(zWayResponse => {
 			verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
-			var zWayDevices = JSON.parse(zWayResponse.responseText).data.devices;
-			endpoints.concat(zWayDevices);
+			var zWayEndpoints = JSON.parse(zWayResponse.responseText).data.devices.
+				filter(zWayDevice => isZWayDeviceValid)
+				.map(zWayDevice => {
+					return {
+						id: zWayDevice.id,
+						name: zWayDevice.metrics.name,
+						description: zWayDevice.metrics.name,
+						manufacturer: zWayDevice.metrics.name,
+						type: zWayDevice.deviceType
+					};
+				})
+			endpoints.concat(zWayEndpoints);
 		})
 		.catch(error => {
 			console.log(`z-way device discovery error: ${JSON.stringify(error)}`);
@@ -376,7 +395,8 @@ server.put(getEndpoint(SUPPORTED_RESOURCES.power), (inRequest, inResponse) => {
 				verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
 				return sendSuccess(inResponse, {
 					state: powerState,
-					isoTimestamp: now()
+					isoTimestamp: now(),
+					uncertaintyMs: 0
 				});
 			})
 			.catch(error => sendError(inResponse, error));
