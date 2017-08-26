@@ -189,7 +189,7 @@ function getOptions(postData) {
 	var headers = assign({
 		'Content-Length': typeof postData === 'string' ? Buffer.byteLength(postData) : 0
 	}, DEFAULT_HEADERS);
-	return assign({ headers: headers }, DEFAULT_OPTIONS);
+	return { headers: headers };
 }
 
 
