@@ -46,7 +46,10 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		volumeDown: 'KEY_VOLUMEDOWN',
 		channelUp: 'KEY_CHANNELUP',
 		channelDown: 'KEY_CHANNELDOWN',
-		mute: 'KEY_MUTE'
+		mute: 'KEY_MUTE',
+		input: 'KEY_SWITCHVIDEOMODE',
+		liveTv: 'KEY_TV',
+		warmUp: 'KEY_RED'
 	},
 	PAUSE_MS = 1000,
 	MAX_IR_REPEAT = 50,
@@ -106,18 +109,24 @@ function httpPromise(options, postData) {
 			outRequest.write(postData);
 		}
 		outRequest.end();
+	})
+	.then(response => {
+		if (response.statusCode === 200) {
+			return response;
+		}
+		throw new Error(`HTTP statusCode ${response.statusCode}`);
 	});
 }
 function get(path, options) {
-	verbose(`GET ${path}`);
+	verbose('GET', path);
 	return httpPromise(assign({ method: 'GET', path: path }, options));
 }
 function put(path, options, postData) {
-	verbose(`PUT ${path} ${postData}`);
+	verbose('PUT', path, postData);
 	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
 }
 function post(path, options, postData) {
-	verbose(`POST ${path} ${postData}`);
+	verbose('POST', path, postData);
 	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
 }
 
@@ -132,21 +141,22 @@ function pause() {
 function handleTvChannelRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		channel = inRequest.body;
+	
+	verbose('channel', channel);
+
 	if (typeof channel.channelCount === 'number') {
 
 		/* just send a success immediately */
 		sendSuccess(inResponse);
-		irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount))
-			.then(result => console.log(`ChannelSuccess: ${result}`))
-			.catch(error => console.error(`ChannelFailure: ${error}`));
+		sendIrCommand(TV_KEYS.warmUp, endpointId)
+			.then(irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount)))
+			.then(result => log('channelSuccess', result))
+			.catch(error => log('channelFailure', error));
 	} else {
 
 		/* TODO: implement */
-		console.log(`Unimplemented channel: ${JSON.stringify(channel)}`);
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
-
-
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
@@ -154,20 +164,34 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 }
 
 function handleTvInputRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
-}
+	var endpointId = getEndpointId(inRequest),
+		input = inRequest.body;
+		
+	if (typeof input.name === 'string') {
 
-function handleTvPlaybackRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
+		/* just send a success immediately */
+		sendSuccess(inResponse);
+
+		sendIrCommand(TV_KEYS.warmUp, endpointId)
+
+	} else {
+
+		/* TODO: implement */
+		sendUnsupportedDeviceOperationError(inRequest, inResponse);
+	}
 }
 
 function handleRokuPlaybackRequest(inRequest, inResponse) {
 	sendError('Not yet implemented', inResponse);
 }
 
-function verbose(message) {
+function log() {
+	console.log.apply(console, Array.prototype.map.call(arguments, argument => typeof argument === 'object' ? JSON.stringify(argument) : argument));
+}
+
+function verbose() {
 	if (isVerbose) {
-		console.log(message);
+		log.apply(null, arguments);
 	}
 }
 
@@ -240,7 +264,9 @@ function handleTvPowerRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		powerState = inRequest.body.state,
 		key = TV_KEYS.power;
-	sendIrCommand(key, endpointId)
+
+	sendIrCommand(TV_KEYS.warmUp, endpointId)
+		.then(() => sendIrCommand(key, endpointId))
 		.then(irResponse =>
 			sendSuccess(inResponse, {
 				state: powerState,
@@ -256,13 +282,7 @@ function sendIrCommand(key, endpointId) {
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/command`,
 		postData = JSON.stringify({ key: key });
-	return put(irPath, getIrOptions(postData), postData)
-		.then(irResponse => {
-			if (irResponse.statusCode === 200) {
-				return irResponse;
-			}
-			throw new Error(`Received failed statusCode: ${irResponse.statusCode}`);
-		});
+	return put(irPath, getIrOptions(postData), postData);
 }
 
 function irRepeat(key, endpointId, times) {
@@ -272,7 +292,7 @@ function irRepeat(key, endpointId, times) {
 		return sendIrCommand(key, endpointId);
 	} else if (times > MAX_IR_REPEAT) {
 
-		/* trying to prevent ddos */
+		/* trying to prevent dos */
 		return irRepeat(key, endpointId, MAX_IR_REPEAT);
 	} else {
 		return sendIrCommand(key, endpointId)
@@ -283,30 +303,33 @@ function irRepeat(key, endpointId, times) {
 
 function handleTvVolumeRequest(inRequest, inResponse) {
 	var volumeSteps = inRequest.body.volumeSteps,
-		mute = inRequest.body.mute;
+		mute = inRequest.body.mute,
+		endpointId = getEndpointId(inRequest);
 
 	/* no way to determine status, just return a success */
 	sendSuccess(inResponse);
 
 	if (typeof mute === 'boolean') {
-		sendIrCommand(TV_KEYS.mute, endpointId);
+		sendIrCommand(TV_KEYS.warmUp, endpointId)
+			.then(() => sendIrCommand(TV_KEYS.mute, endpointId));
 	} else if (volumeSteps) {
 		var key = volumeSteps < 0 ? TV_KEYS.volumeDown : TV_KEYS.volumeUp;
-		irRepeat(key, endpointId, Math.abs(volumeSteps));
+		sendIrCommand(TV_KEYS.warmUp, endpointId)
+			.then(() => irRepeat(key, endpointId, Math.abs(volumeSteps)));
 	} else {
 		sendError(inResponse, 'Invalid request');
 	}
 }
 
 function sendError(response, error) {
-	var sendData = JSON.stringify({ error: (typeof error === 'string' ? new Error(error) : error) });
-	verbose(`REPLY 500 ${sendData}`);
+	var sendData = JSON.stringify({ error: typeof error === 'string' ? new Error(error) : error });
+	verbose('REPLY 500', sendData);
 	response.status(500).send(sendData);
 }
 
 function sendSuccess(response, payload) {
 	var sendData = JSON.stringify(payload === undefined ? { code: 200, message: '200 OK' } : payload);
-	verbose(`REPLY 200 ${sendData}`);
+	verbose('REPLY 200', sendData);
 	response.status(200).send(sendData);
 }
 
@@ -315,8 +338,8 @@ function getEndpointId(inRequest) {
 }
 
 function logRequest(inRequest) {
-	verbose(`RECV ${JSON.stringify(inRequest.body)}`);
-	console.log(`${inRequest.method} request for ${inRequest.path} received`);
+	verbose('RECV', inRequest.body);
+	log(inRequest.method, inRequest.path);
 }
 
 function getRequestResource(inRequest) {
@@ -377,9 +400,6 @@ function handleTvRequest(inRequest, inResponse) {
 		case SUPPORTED_RESOURCES.channel:
 			handleTvChannelRequest(inRequest, inResponse);
 			break;
-		case SUPPORTED_RESOURCES.playback:
-			handleTvPlaybackRequest(inRequest, inResponse);
-			break;
 		case SUPPORTED_RESOURCES.volume:
 			handleTvVolumeRequest(inRequest, inResponse);
 			break;
@@ -433,12 +453,12 @@ server.get('/endpoints', (inRequest, inResponse) => {
 						type: zWayDevice.deviceType
 					};
 				});
-			verbose(`zWayEndpoints(${JSON.stringify(zWayEndpoints)})`);
+			verbose('zWayEndpoints', zWayEndpoints);
 			endpoints = endpoints.concat(zWayEndpoints);
 			return endpoints;
 		})
 		.catch(error => {
-			console.log(`z-way device discovery error: ${JSON.stringify(error)}`);
+			log('zWayDeviceDiscoveryError', error);
 		})
 
 		/* even if there was an error, we reply with the static endpoints */
@@ -459,7 +479,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 
 		zWayGet(`/devices/${getEndpointId(inRequest)}/command/${powerState}`)
 			.then(zWayResponse => {
-				verbose(`zWayResponse: ${JSON.stringify(zWayResponse)}`);
+				verbose('zWayResponse', zWayResponse);
 				return sendSuccess(inResponse, {
 					state: powerState,
 					isoTimestamp: now(),
