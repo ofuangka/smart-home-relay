@@ -2,23 +2,13 @@
  * this script creates an express server that handles GET requests to /endpoints and 
  * PUT requests to /endpoints/:endpointId/:resource. /endpoints gets relayed as a device list request 
  * on the z-way network, and the device specific PUT request relays the request to the z-way server 
- * 
- * Usage: USERNAME=USERNAME PASSWORD=PASSWORD node index.js PORT IR_SERVER_HOST IR_SERVER_PORT
- * 	where PORT is the port to listen on,
- *  USERNAME and PASSWORD are the credentials to use when relaying to the z-way server, 
- *  and IR_SERVER_HOST IR_SERVER_PORT are the IR server and port
  */
-if (process.argv.length < 5) {
-	console.log(`Usage: USERNAME=USERNAME PASSWORD=PASSWORD node ${__filename} PORT IR_SERVER_HOST IR_SERVER_PORT`);
-	process.exit(-1);
-}
 
 const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 	DEFAULT_HEADERS = {
 		accept: '*/*',
 		'Content-Type': 'application/json'
 	},
-	Z_WAY_PORT = 8083,
 	TV = {
 		id: 'tv',
 		type: 'television',
@@ -64,18 +54,23 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 var express = require('express'),
 	bodyParser = require('body-parser'),
 	http = require('http'),
-	server = express(),
-	port = process.argv[2],
-	username = process.env.USERNAME,
-	password = process.env.PASSWORD,
-	irServerHost = process.argv[3],
-	irServerPort = process.argv[4],
+	dotenv = require('dotenv'),
+	server = express();
+
+dotenv.load();
+
+var port = process.env.LISTEN_PORT,
+	username = process.env.Z_WAY_USERNAME,
+	password = process.env.Z_WAY_PASSWORD,
+	zWayHost = process.env.Z_WAY_HOST,
+	zWayPort = process.env.Z_WAY_PORT,
+	irHost = process.env.IR_HOST,
+	irPort = process.env.IR_PORT,
+	rokuHost = process.env.ROKU_HOST,
+	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
 	sid;
 
-/**
- * cheap polyfill for Object.assign()
- */
 function assign(target) {
 	for (var i = 1; i < arguments.length; i++) {
 		var source = arguments[i];
@@ -88,9 +83,6 @@ function assign(target) {
 	return target;
 }
 
-/**
- * promise wrapper for http
- */
 function httpPromise(options, postData) {
 	return new Promise((resolve, reject) => {
 		var outRequest = http.request(options, outResponse => {
@@ -117,14 +109,17 @@ function httpPromise(options, postData) {
 		throw new Error(`HTTP statusCode ${response.statusCode}`);
 	});
 }
+
 function get(path, options) {
 	verbose('GET', path);
 	return httpPromise(assign({ method: 'GET', path: path }, options));
 }
+
 function put(path, options, postData) {
 	verbose('PUT', path, postData);
 	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
 }
+
 function post(path, options, postData) {
 	verbose('POST', path, postData);
 	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
@@ -173,7 +168,9 @@ function handleTvInputRequest(inRequest, inResponse) {
 		sendSuccess(inResponse);
 
 		sendIrCommand(TV_KEYS.warmUp, endpointId)
-
+			.then(result => /* TODO: implement */ Promise.resolve())
+			.then(result => log('inputSuccess', result))
+			.catch(error => log('inputError', error));
 	} else {
 
 		/* TODO: implement */
@@ -212,8 +209,7 @@ function getZWaySession() {
  * @param {string?} postData The postData 
  */
 function getZWayOptions(includeSid, postData) {
-	var ret = getOptions(postData);
-	ret.port = Z_WAY_PORT;
+	var ret = getOptions(zWayHost, zWayPort, postData);
 	if (includeSid) {
 		ret.headers.ZWAYSession = sid;
 	}
@@ -221,17 +217,23 @@ function getZWayOptions(includeSid, postData) {
 }
 
 function getIrOptions(postData) {
-	var ret = getOptions(postData);
-	ret.hostname = irServerHost;
-	ret.port = irServerPort;
-	return ret;
+	return getOptions(irHost, irPort, postData);
 }
 
-function getOptions(postData) {
+function getRokuOptions(postData) {
+	return getOptions(rokuHost, rokuPort, postData);
+}
+
+function getOptions(hostname, port, postData) {
 	var headers = assign({
 		'Content-Length': typeof postData === 'string' ? Buffer.byteLength(postData) : 0
 	}, DEFAULT_HEADERS);
-	return { headers: headers };
+	var ret = { headers: headers };
+	if (hostname && hostname !== 'localhost') {
+		ret.hostname = hostname;
+	}
+	ret.port = port;
+	return ret;
 }
 
 
@@ -402,6 +404,9 @@ function handleTvRequest(inRequest, inResponse) {
 			break;
 		case SUPPORTED_RESOURCES.volume:
 			handleTvVolumeRequest(inRequest, inResponse);
+			break;
+		case SUPPORTED_RESOURCES.input:
+			handleTvInputRequest(inRequest, inResponse);
 			break;
 		default:
 			sendUnsupportedDeviceOperationError(inRequest, inResponse);
