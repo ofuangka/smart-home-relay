@@ -41,6 +41,29 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		liveTv: 'KEY_TV',
 		warmUp: 'KEY_RED'
 	},
+	ROKU_KEYS = {
+		home: 'Home',
+		reverse: 'Rev',
+		forward: 'Fwd',
+		play: 'Play',
+		select: 'Select',
+		left: 'Left',
+		right: 'Right',
+		down: 'Down',
+		up: 'Up',
+		back: 'Back',
+		instantReplay: 'InstantReplay',
+		info: 'Info',
+		backspace: 'Backspace',
+		search: 'Search',
+		enter: 'Enter'
+	},
+	ALEXA_PLAYBACK = {
+		FastForward: 'forward',
+		Rewind: 'reverse',
+		Pause: 'play',
+		Play: 'play'
+	},
 	PAUSE_MS = 1000,
 	MAX_IR_REPEAT = 50,
 	SUPPORTED_RESOURCES = {
@@ -55,6 +78,7 @@ var express = require('express'),
 	bodyParser = require('body-parser'),
 	http = require('http'),
 	dotenv = require('dotenv'),
+	parseString = require('xml2js').parseString;
 	server = express();
 
 dotenv.load();
@@ -110,6 +134,18 @@ function httpPromise(options, postData) {
 	});
 }
 
+function xmlParse(s) {
+	return new Promise((resolve, reject) => {
+		parseString(s, (error, result) => {
+			if (error) {
+				reject(error);
+			} else {
+				resolve(result);
+			}
+		});
+	});
+}
+
 function get(path, options) {
 	verbose('GET', path);
 	return httpPromise(assign({ method: 'GET', path: path }, options));
@@ -155,7 +191,15 @@ function handleTvChannelRequest(inRequest, inResponse) {
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
+	get('/query/apps', getRokuOptions())
+		.then(response => xmlParse(response.responseText))
+		.then(apps => {
+			for (var i = 0; i < apps.length; i++) {
+				log(apps[i]);
+			}
+			sendSuccess(inResponse);
+		})
+		.catch(error => sendError(inResponse, error));
 }
 
 function handleTvInputRequest(inRequest, inResponse) {
@@ -179,7 +223,14 @@ function handleTvInputRequest(inRequest, inResponse) {
 }
 
 function handleRokuPlaybackRequest(inRequest, inResponse) {
-	sendError('Not yet implemented', inResponse);
+	var directive = inRequest.body.directive;
+	if (ALEXA_PLAYBACK.hasOwnProperty(directive)) {
+		post(`/keypress/${ALEXA_PLAYBACK[directive]}`, getRokuOptions())
+			.then(rokuResponse => sendSuccess(inResponse))
+			.catch(error => sendError(inResponse, error));
+	} else {
+		sendUnsupportedDeviceOperationError(inRequest, inResponse);
+	}
 }
 
 function log() {
