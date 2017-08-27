@@ -1,7 +1,7 @@
 {
-	"name": "z-way-relay",
+	"name": "smart-home-relay",
 	"version": "1.0.0",
-	"description": "Relays authenticated requests to the local z-way server",
+	"description": "Relays authenticated smart home requests to the local servers",
 	"main": "index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
