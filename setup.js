@@ -1,4 +1,4 @@
 'use strict';
-fs = require('fs');
+var fs = require('fs');
 fs.createReadStream('.sample-env')
     .pipe(fs.createWriteStream('.env'));
