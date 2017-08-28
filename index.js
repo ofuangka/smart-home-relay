@@ -194,6 +194,7 @@ function handleTvChannelRequest(inRequest, inResponse) {
 function handleRokuChannelRequest(inRequest, inResponse) {
 	var channel = inRequest.body,
 		number = channel.number - 1;
+	sendSuccess(inResponse, channel);
 	get('/query/apps', getRokuOptions())
 		.then(response => xmlParse(response.responseText))
 		.then(result => {
@@ -205,7 +206,6 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 				throw new Error(`Requested channel not available: ${number}`);
 			}
 		})
-		.then(rokuResponse => sendSuccess(inResponse, channel))
 		.catch(error => sendError(inResponse, error));
 }
 
