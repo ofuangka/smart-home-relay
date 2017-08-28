@@ -179,7 +179,11 @@ function handleTvChannelRequest(inRequest, inResponse) {
 	if (typeof channel.channelCount === 'number') {
 
 		/* just send a success immediately */
-		sendSuccess(inResponse);
+		sendSuccess(inResponse, {
+			value: channel,
+			isoTimestamp: now(),
+			uncertaintyMs: 0
+		});
 		sendIrCommand(TV_KEYS.warmUp, endpointId)
 			.then(irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount)))
 			.then(result => log('channelSuccess', result))
@@ -194,7 +198,11 @@ function handleTvChannelRequest(inRequest, inResponse) {
 function handleRokuChannelRequest(inRequest, inResponse) {
 	var channel = inRequest.body,
 		number = channel.number - 1;
-	sendSuccess(inResponse, channel);
+	sendSuccess(inResponse, {
+		value: channel,
+		isoTimestamp: now(),
+		uncertaintyMs: 0
+	});
 	get('/query/apps', getRokuOptions())
 		.then(response => xmlParse(response.responseText))
 		.then(result => {
