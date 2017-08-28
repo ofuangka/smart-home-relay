@@ -39,7 +39,8 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		mute: 'KEY_MUTE',
 		input: 'KEY_SWITCHVIDEOMODE',
 		liveTv: 'KEY_TV',
-		warmUp: 'KEY_RED'
+		warmUp: 'KEY_RED',
+		ok: 'KEY_OK'
 	},
 	ROKU_KEYS = {
 		home: 'Home',
@@ -223,15 +224,19 @@ function handleTvInputRequest(inRequest, inResponse) {
 	
 	log('input:', input);
 		
-	if (typeof input.name === 'string') {
+	if (typeof input.name === 'string' && !isNaN(parseInt(input.name))) {
+		var inputId = parseInt(input.name);
 
-		/* just send a success immediately */
-		sendSuccess(inResponse);
-
-		sendIrCommand(TV_KEYS.warmUp, endpointId)
-			.then(result => /* TODO: implement */ Promise.resolve())
-			.then(result => log('inputSuccess', result))
-			.catch(error => log('inputError', error));
+			/* just send a success immediately */
+			sendSuccess(inResponse);
+			sendIrCommand(TV_KEYS.warmUp, endpointId)
+				.then(result => sendIrCommand(TV_KEYS.liveTv, endpointId))
+				.then(pause)
+				.then(() => irRepeat(TV_KEYS.input, endpointId, inputId))
+				.then(pause)
+				.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
+				.then(result => log('inputSuccess', result))
+				.catch(error => log('inputError', error));
 	} else {
 
 		/* TODO: implement */
