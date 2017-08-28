@@ -191,14 +191,22 @@ function handleTvChannelRequest(inRequest, inResponse) {
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
+	var channel = inRequest.body.name;
 	get('/query/apps', getRokuOptions())
 		.then(response => xmlParse(response.responseText))
-		.then(apps => {
-			for (var i = 0; i < apps.length; i++) {
-				log(apps[i]);
+		.then(result => {
+			log('result', result);
+			if (result && result.apps) {
+				var apps = result.apps.app;
+				for (var i = 0; i < apps.length; i++) {
+					if (apps[i]._.toLowerCase() === channel.toLowerCase()) {
+						return post(`/launch/${apps[i].$.id}`);
+					}
+				}
+				throw new Error(`Requested channel not available: ${channel}`);
 			}
-			sendSuccess(inResponse);
 		})
+		.then(() => sendSuccess(inResponse))
 		.catch(error => sendError(inResponse, error));
 }
 
