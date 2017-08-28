@@ -62,7 +62,8 @@ const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
 		FastForward: 'forward',
 		Rewind: 'reverse',
 		Pause: 'play',
-		Play: 'play'
+		Play: 'play',
+		StartOver: 'home'
 	},
 	PAUSE_MS = 1000,
 	MAX_IR_REPEAT = 50,
@@ -191,19 +192,20 @@ function handleTvChannelRequest(inRequest, inResponse) {
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
-	var channel = inRequest.body.number - 1;
+	var channel = inRequest.body,
+		number = channel.number - 1;
 	get('/query/apps', getRokuOptions())
 		.then(response => xmlParse(response.responseText))
 		.then(result => {
 			if (result && result.apps) {
 				var apps = result.apps.app.filter(app => app.$.type === 'appl');
-				if (apps[channel]) {
-					return post(`/launch/${apps[channel].$.id}`, getRokuOptions());
+				if (apps[number]) {
+					return post(`/launch/${apps[number].$.id}`, getRokuOptions());
 				}
-				throw new Error(`Requested channel not available: ${channel}`);
+				throw new Error(`Requested channel not available: ${number}`);
 			}
 		})
-		.then(rokuResponse => sendSuccess(inResponse, rokuResponse))
+		.then(rokuResponse => sendSuccess(inResponse, channel))
 		.catch(error => sendError(inResponse, error));
 }
 
