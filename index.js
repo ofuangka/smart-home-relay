@@ -203,10 +203,7 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 				throw new Error(`Requested channel not available: ${channel}`);
 			}
 		})
-		.then(rokuResponse => {
-			verbose('rokuResponse:', rokuResponse);
-			sendSuccess(inResponse)
-		})
+		.then(rokuResponse => sendSuccess(inResponse, rokuResponse))
 		.catch(error => sendError(inResponse, error));
 }
 
@@ -235,8 +232,8 @@ function handleTvInputRequest(inRequest, inResponse) {
 function handleRokuPlaybackRequest(inRequest, inResponse) {
 	var directive = inRequest.body.directive;
 	if (ALEXA_PLAYBACK.hasOwnProperty(directive)) {
-		post(`/keypress/${ALEXA_PLAYBACK[directive]}`, getRokuOptions())
-			.then(rokuResponse => sendSuccess(inResponse))
+		post(`/keypress/${ROKU_KEYS[ALEXA_PLAYBACK[directive]]}`, getRokuOptions())
+			.then(rokuResponse => sendSuccess(inResponse, rokuResponse))
 			.catch(error => sendError(inResponse, error));
 	} else {
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
