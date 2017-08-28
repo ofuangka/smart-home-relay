@@ -198,7 +198,7 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 			if (result && result.apps) {
 				var apps = result.apps.app.filter(app => app.$.type === 'appl');
 				if (channel < apps.length) {
-					return post(`/launch/${apps[channel].$.id}`);
+					return post(`/launch/${apps[channel].$.id}`, getRokuOptions());
 				}
 				throw new Error(`Requested channel not available: ${channel}`);
 			}
