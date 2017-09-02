@@ -463,7 +463,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 		ROKU
 	];
 
-	get('/states', getHassOptions())
+	get(`${HASS_PREFIX}/states`, getHassOptions())
 		.then(response => JSON.parse(response.responseText))
 		.then(states => states.filter(isStateValid))
 		.then(binarySwitches => binarySwitches.forEach(binarySwitch => endpoints.push({
@@ -490,7 +490,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 
 		/* make a request to the z-way server */
 		var postData = JSON.stringify({ state: inRequest.params.state });
-		post(`/api/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
+		post(`${HASS_PREFIX}/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => sendSuccess(inResponse, {
 				state: hassResponse.state,
