@@ -495,7 +495,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the z-way server */
-		var service = inRequest.body.state === 'on' ? 'turnon' : 'turnoff',
+		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			postData = JSON.stringify({ entity_id: endpointId });
 		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData)
