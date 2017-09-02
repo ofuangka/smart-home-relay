@@ -466,13 +466,16 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	get(`${HASS_PREFIX}/states`, getHassOptions())
 		.then(response => JSON.parse(response.responseText))
 		.then(states => states.filter(isStateValid))
-		.then(binarySwitches => binarySwitches.forEach(binarySwitch => endpoints.push({
-			id: binarySwitch.entity_id,
-			type: 'binarySwitch',
-			name: binarySwitch.attributes.friendly_name,
-			description: '',
-			manufacturer: ''
-		})))
+		.then(binarySwitches => {
+			verbose('binarySwitches:', binarySwitches);
+			binarySwitches.forEach(binarySwitch => endpoints.push({
+				id: binarySwitch.entity_id,
+				type: 'binarySwitch',
+				name: binarySwitch.attributes.friendly_name,
+				description: '',
+				manufacturer: ''
+			}));
+		})
 		.catch(log)
 		.then(() => {
 			sendSuccess(inResponse, endpoints);
@@ -492,11 +495,14 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		var postData = JSON.stringify({ state: inRequest.params.state });
 		post(`${HASS_PREFIX}/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
-			.then(hassResponse => sendSuccess(inResponse, {
-				state: hassResponse.state,
-				isoTimestamp: now(),
-				uncertaintyMs: 0
-			}))
+			.then(hassResponse => {
+				verbose('hassResponse:', hassResponse);
+				sendSuccess(inResponse, {
+					state: hassResponse.state,
+					isoTimestamp: now(),
+					uncertaintyMs: 0
+				});
+			})
 			.catch(error => {
 				log(error);
 				sendError(inResponse, error);
