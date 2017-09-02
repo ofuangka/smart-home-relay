@@ -81,7 +81,7 @@ var express = require('express'),
 	http = require('http'),
 	dotenv = require('dotenv'),
 	parseString = require('xml2js').parseString;
-	server = express();
+server = express();
 
 dotenv.load();
 
@@ -127,12 +127,12 @@ function httpPromise(options, postData) {
 		}
 		outRequest.end();
 	})
-	.then(response => {
-		if (response.statusCode === 200) {
-			return response;
-		}
-		throw new Error(`HTTP statusCode ${response.statusCode}`);
-	});
+		.then(response => {
+			if (response.statusCode === 200) {
+				return response;
+			}
+			throw new Error(`HTTP statusCode ${response.statusCode}`);
+		});
 }
 
 function xmlParse(s) {
@@ -173,7 +173,7 @@ function pause() {
 function handleTvChannelRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		channel = inRequest.body;
-	
+
 	verbose('channel', channel);
 
 	if (typeof channel.channelCount === 'number') {
@@ -220,22 +220,22 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 function handleTvInputRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		input = inRequest.body;
-	
+
 	log('input:', input);
-		
+
 	if (typeof input.name === 'string' && !isNaN(parseInt(input.name))) {
 		var inputId = parseInt(input.name);
 
-			/* just send a success immediately */
-			sendSuccess(inResponse);
-			sendIrCommand(TV_KEYS.warmUp, endpointId)
-				.then(result => sendIrCommand(TV_KEYS.liveTv, endpointId))
-				.then(pause)
-				.then(() => irRepeat(TV_KEYS.input, endpointId, inputId))
-				.then(pause)
-				.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
-				.then(result => log('inputSuccess', result))
-				.catch(error => log('inputError', error));
+		/* just send a success immediately */
+		sendSuccess(inResponse);
+		sendIrCommand(TV_KEYS.warmUp, endpointId)
+			.then(result => sendIrCommand(TV_KEYS.liveTv, endpointId))
+			.then(pause)
+			.then(() => irRepeat(TV_KEYS.input, endpointId, inputId))
+			.then(pause)
+			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
+			.then(result => log('inputSuccess', result))
+			.catch(error => log('inputError', error));
 	} else {
 
 		/* TODO: implement */
@@ -495,16 +495,25 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the z-way server */
-		var postData = JSON.stringify({ state: inRequest.body.state });
-		post(`${HASS_PREFIX}/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
+		var service = inRequest.body.state === 'on' ? 'turnon' : 'turnoff',
+			endpointId = getEndpointId(inRequest),
+			postData = JSON.stringify({ entity_id: endpointId });
+		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
-				sendSuccess(inResponse, {
-					state: hassResponse.state,
-					isoTimestamp: now(),
-					uncertaintyMs: 0
-				});
+				var newState = hassResponse[0];
+				if (newState
+					&& newState.entity_id === endpointId
+					&& newState.state) {
+					sendSuccess(inResponse, {
+						state: newState.state,
+						isoTimestamp: now(),
+						uncertaintyMs: 0
+					});
+				} else {
+					throw new Error('Unexpected HASS response');
+				}
 			})
 			.catch(error => {
 				log(error);
