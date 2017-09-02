@@ -446,7 +446,7 @@ function isStateValid(state) {
 	return state.entity_id
 		&& state.entity_id.startsWith('switch.')
 		&& state.attributes
-		&& state.attributes.friendlyName
+		&& state.attributes.friendly_name
 }
 
 server.use(bodyParser.json());
@@ -464,10 +464,10 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	];
 
 	get(`${HASS_PREFIX}/states`, getHassOptions())
-		.then(response => JSON.parse(response.responseText).states)
+		.then(response => JSON.parse(response.responseText))
 		.then(states => {
 			verbose('states:', states);
-			return states.filter(isStateValid)
+			return states.filter(isStateValid);
 		})
 		.then(binarySwitches => {
 			verbose('binarySwitches:', binarySwitches);
