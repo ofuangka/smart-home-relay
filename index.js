@@ -495,7 +495,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the z-way server */
-		var postData = JSON.stringify({ state: inRequest.params.state });
+		var postData = JSON.stringify({ state: inRequest.body.state });
 		post(`${HASS_PREFIX}/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
