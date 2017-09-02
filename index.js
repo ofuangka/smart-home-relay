@@ -4,7 +4,7 @@
  * on the z-way network, and the device specific PUT request relays the request to the z-way server 
  */
 
-const Z_WAY_PATH_PREFIX = '/ZAutomation/api/v1',
+const HASS_PREFIX = '/api',
 	DEFAULT_HEADERS = {
 		accept: '*/*',
 		'Content-Type': 'application/json'
@@ -86,10 +86,9 @@ var express = require('express'),
 dotenv.load();
 
 var port = process.env.LISTEN_PORT,
-	username = process.env.Z_WAY_USERNAME,
-	password = process.env.Z_WAY_PASSWORD,
-	zWayHost = process.env.Z_WAY_HOST,
-	zWayPort = process.env.Z_WAY_PORT,
+	hassPassword = process.env.HASS_PASSWORD,
+	hassHost = process.env.HASS_HOST,
+	hassPort = process.env.HASS_PORT,
 	irHost = process.env.IR_HOST,
 	irPort = process.env.IR_PORT,
 	rokuHost = process.env.ROKU_HOST,
@@ -265,30 +264,6 @@ function verbose() {
 	}
 }
 
-/**
- * Gets a z-way session ID using the USERNAME and PASSWORD
- */
-function getZWaySession() {
-	var fullPath = `${Z_WAY_PATH_PREFIX}/login`,
-		postData = JSON.stringify({ login: username, password: password });
-	return post(fullPath, getZWayOptions(false, postData), postData)
-		.then(response => JSON.parse(response.responseText).data.sid);
-}
-
-/**
- * Returns options for http
- * 
- * @param {boolean?} includeSid Whether to include the sid
- * @param {string?} postData The postData 
- */
-function getZWayOptions(includeSid, postData) {
-	var ret = getOptions(zWayHost, zWayPort, postData);
-	if (includeSid) {
-		ret.headers.ZWAYSession = sid;
-	}
-	return ret;
-}
-
 function getIrOptions(postData) {
 	return getOptions(irHost, irPort, postData);
 }
@@ -297,28 +272,22 @@ function getRokuOptions(postData) {
 	return getOptions(rokuHost, rokuPort, postData);
 }
 
-function getOptions(hostname, port, postData) {
+function getHassOptions(postData) {
+	return getOptions(hassHost, hassPort, postData, {
+		'x-ha-access': hassPassword
+	});
+}
+
+function getOptions(hostname, port, postData, overrideHeaders) {
 	var headers = assign({
 		'Content-Length': typeof postData === 'string' ? Buffer.byteLength(postData) : 0
-	}, DEFAULT_HEADERS);
+	}, DEFAULT_HEADERS, overrideHeaders);
 	var ret = { headers: headers };
 	if (hostname && hostname !== 'localhost') {
 		ret.hostname = hostname;
 	}
 	ret.port = port;
 	return ret;
-}
-
-
-/**
- * Opens a z-way session and uses that session to make a GET request
- * 
- * @param {string} path The request path 
- */
-function zWayAuthGet(path) {
-	return getZWaySession()
-		.then(_sid => sid = _sid)
-		.then(() => get(path, getZWayOptions(true)));
 }
 
 /**
@@ -425,37 +394,8 @@ function sendUnsupportedDeviceOperationError(inRequest, inResponse) {
 	sendError(inResponse, `Endpoint ${getEndpointId(inRequest)} does not support ${getRequestResource(inRequest)}`);
 }
 
-/**
- * Attempts to make a GET request using an existing session ID. If the attempt 
- * fails with a 401 unauthorized, attempts to start a new session and then 
- * make the same GET request
- * 
- * @param {string} path The request path 
- */
-function zWayGet(path) {
-	var fullPath = `${Z_WAY_PATH_PREFIX}${path}`;
-	if (sid) {
-		return get(fullPath, getZWayOptions(true))
-			.then(response => {
-				if (response.statusCode === 401) {
-					return zWayAuthGet(fullPath);
-				}
-				return response;
-			});
-	}
-	return zWayAuthGet(fullPath);
-}
-
 function now() {
 	return new Date().toISOString();
-}
-
-function isZWayDeviceValid(zWayDevice) {
-	return zWayDevice
-		&& zWayDevice.id
-		&& zWayDevice.metrics
-		&& zWayDevice.metrics.title
-		&& zWayDevice.deviceType;
 }
 
 function isPowerRequest(inRequest) {
@@ -502,6 +442,13 @@ function handleRokuRequest(inRequest, inResponse) {
 	}
 }
 
+function isStateValid(state) {
+	return state.entity_id
+		&& state.entity_id.startsWith('switch.')
+		&& state.attributes
+		&& state.attributes.friendlyName
+}
+
 server.use(bodyParser.json());
 server.use(bodyParser.urlencoded({ extended: true }));
 
@@ -516,31 +463,20 @@ server.get('/endpoints', (inRequest, inResponse) => {
 		ROKU
 	];
 
-	/* make a request to the z way server */
-	zWayGet('/devices')
-		.then(zWayResponse => {
-			verbose(`zWayResponse(${JSON.stringify(zWayResponse)})`);
-			var zWayEndpoints = JSON.parse(zWayResponse.responseText).data.devices
-				.filter(isZWayDeviceValid)
-				.map(zWayDevice => {
-					return {
-						id: zWayDevice.id,
-						name: zWayDevice.metrics.title,
-						description: zWayDevice.metrics.title,
-						manufacturer: zWayDevice.metrics.title,
-						type: zWayDevice.deviceType
-					};
-				});
-			verbose('zWayEndpoints', zWayEndpoints);
-			endpoints = endpoints.concat(zWayEndpoints);
-			return endpoints;
-		})
-		.catch(error => {
-			log('zWayDeviceDiscoveryError', error);
-		})
-
-		/* even if there was an error, we reply with the static endpoints */
-		.then(() => sendSuccess(inResponse, endpoints));
+	get('/states', getHassOptions())
+		.then(response => JSON.parse(response.responseText))
+		.then(states => states.filter(isStateValid))
+		.then(binarySwitches => binarySwitches.forEach(binarySwitch => endpoints.push({
+			id: binarySwitch.entity_id,
+			type: 'binarySwitch',
+			name: binarySwitch.attributes.friendly_name,
+			description: '',
+			manufacturer: ''
+		})))
+		.catch(log)
+		.then(() => {
+			sendSuccess(inResponse, endpoints);
+		});
 });
 
 /* express put handler */
@@ -553,18 +489,18 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the z-way server */
-		var powerState = inRequest.body.state;
-
-		zWayGet(`/devices/${getEndpointId(inRequest)}/command/${powerState}`)
-			.then(zWayResponse => {
-				verbose('zWayResponse', zWayResponse);
-				return sendSuccess(inResponse, {
-					state: powerState,
-					isoTimestamp: now(),
-					uncertaintyMs: 0
-				});
-			})
-			.catch(error => sendError(inResponse, error));
+		var postData = JSON.stringify({ state: inRequest.params.state });
+		post(`/api/states/${inRequest.params.endpointId}`, getHassOptions(postData), postData)
+			.then(response => JSON.parse(response.responseText))
+			.then(hassResponse => sendSuccess(inResponse, {
+				state: hassResponse.state,
+				isoTimestamp: now(),
+				uncertaintyMs: 0
+			}))
+			.catch(error => {
+				log(error);
+				sendError(inResponse, error);
+			});
 	} else {
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
