@@ -476,7 +476,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 				type: 'binarySwitch',
 				name: binarySwitch.attributes.friendly_name,
 				description: binarySwitch.attributes.friendly_name,
-				manufacturer: binarSwitch.attributes.friendly_name
+				manufacturer: binarySwitch.attributes.friendly_name
 			}));
 		})
 		.catch(log)
