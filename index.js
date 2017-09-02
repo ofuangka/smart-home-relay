@@ -473,7 +473,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 			verbose('binarySwitches:', binarySwitches);
 			binarySwitches.forEach(binarySwitch => endpoints.push({
 				id: binarySwitch.entity_id,
-				type: 'binarySwitch',
+				type: 'switchBinary',
 				name: binarySwitch.attributes.friendly_name,
 				description: binarySwitch.attributes.friendly_name,
 				manufacturer: binarySwitch.attributes.friendly_name
