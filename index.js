@@ -503,7 +503,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
 				sendSuccess(inResponse, {
-					state: newState.state,
+					state: inRequest.body.state,
 					isoTimestamp: now(),
 					uncertaintyMs: 0
 				});
