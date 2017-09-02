@@ -502,18 +502,11 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
-				var newState = hassResponse[0];
-				if (newState
-					&& newState.entity_id === endpointId
-					&& newState.state) {
-					sendSuccess(inResponse, {
-						state: newState.state,
-						isoTimestamp: now(),
-						uncertaintyMs: 0
-					});
-				} else {
-					throw new Error('Unexpected HASS response');
-				}
+				sendSuccess(inResponse, {
+					state: newState.state,
+					isoTimestamp: now(),
+					uncertaintyMs: 0
+				});
 			})
 			.catch(error => {
 				log(error);
