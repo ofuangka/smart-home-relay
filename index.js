@@ -465,7 +465,10 @@ server.get('/endpoints', (inRequest, inResponse) => {
 
 	get(`${HASS_PREFIX}/states`, getHassOptions())
 		.then(response => JSON.parse(response.responseText).states)
-		.then(states => states.filter(isStateValid))
+		.then(states => {
+			verbose('states:', states);
+			return states.filter(isStateValid)
+		})
 		.then(binarySwitches => {
 			verbose('binarySwitches:', binarySwitches);
 			binarySwitches.forEach(binarySwitch => endpoints.push({
