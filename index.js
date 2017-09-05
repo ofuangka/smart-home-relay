@@ -79,6 +79,7 @@ const HASS_PREFIX = '/api',
 var express = require('express'),
 	bodyParser = require('body-parser'),
 	http = require('http'),
+	https = require('https'),
 	dotenv = require('dotenv'),
 	parseString = require('xml2js').parseString;
 server = express();
@@ -108,9 +109,9 @@ function assign(target) {
 	return target;
 }
 
-function httpPromise(options, postData) {
+function httpPromise(options, isSecure, postData) {
 	return new Promise((resolve, reject) => {
-		var outRequest = http.request(options, outResponse => {
+		var outRequest = (isSecure ? https : http).request(options, outResponse => {
 			var data = '';
 			outResponse.on('data', chunk => data += chunk);
 			outResponse.on('end', () => {
@@ -147,19 +148,19 @@ function xmlParse(s) {
 	});
 }
 
-function get(path, options) {
+function get(path, options, isSecure) {
 	verbose('GET', path);
-	return httpPromise(assign({ method: 'GET', path: path }, options));
+	return httpPromise(assign({ method: 'GET', path: path }, options), isSecure);
 }
 
-function put(path, options, postData) {
+function put(path, options, isSecure, postData) {
 	verbose('PUT', path, postData);
-	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
+	return httpPromise(assign({ method: 'PUT', path: path }, options), isSecure, postData);
 }
 
-function post(path, options, postData) {
+function post(path, options, isSecure, postData) {
 	verbose('POST', path, postData);
-	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
+	return httpPromise(assign({ method: 'POST', path: path }, options), isSecure, postData);
 }
 
 function waitFor(ms) {
@@ -463,7 +464,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 		ROKU
 	];
 
-	get(`${HASS_PREFIX}/states`, getHassOptions())
+	get(`${HASS_PREFIX}/states`, getHassOptions(), true)
 		.then(response => JSON.parse(response.responseText))
 		.then(states => {
 			verbose('states:', states);
@@ -498,7 +499,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			postData = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData)
+		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), true, postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
