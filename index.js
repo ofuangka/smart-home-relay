@@ -81,8 +81,9 @@ var express = require('express'),
 	http = require('http'),
 	https = require('https'),
 	dotenv = require('dotenv'),
-	parseString = require('xml2js').parseString;
-server = express();
+	parseString = require('xml2js').parseString,
+	fs = require('fs'),
+	server = express();
 
 dotenv.load();
 
@@ -95,7 +96,12 @@ var port = process.env.LISTEN_PORT,
 	rokuHost = process.env.ROKU_HOST,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
+	httpsHassOptions = {
+		ca: fs.readFileSync(process.env.CA_PATH),
+	},
 	sid;
+
+	httpsHassOptions.agent = new https.Agent(httpHassOptions);
 
 function assign(target) {
 	for (var i = 1; i < arguments.length; i++) {
@@ -274,9 +280,9 @@ function getRokuOptions(postData) {
 }
 
 function getHassOptions(postData) {
-	return getOptions(hassHost, hassPort, postData, {
+	return assign(getOptions(hassHost, hassPort, postData, {
 		'x-ha-access': hassPassword
-	});
+	}), httpsHassOptions);
 }
 
 function getOptions(hostname, port, postData, overrideHeaders) {
