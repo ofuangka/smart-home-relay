@@ -101,7 +101,7 @@ var port = process.env.LISTEN_PORT,
 	},
 	sid;
 
-	httpsHassOptions.agent = new https.Agent(httpHassOptions);
+	httpsHassOptions.agent = new https.Agent(httpsHassOptions);
 
 function assign(target) {
 	for (var i = 1; i < arguments.length; i++) {
