@@ -159,12 +159,12 @@ function get(path, options, isSecure) {
 	return httpPromise(assign({ method: 'GET', path: path }, options), isSecure);
 }
 
-function put(path, options, isSecure, postData) {
+function put(path, options, postData, isSecure) {
 	verbose('PUT', path, postData);
 	return httpPromise(assign({ method: 'PUT', path: path }, options), isSecure, postData);
 }
 
-function post(path, options, isSecure, postData) {
+function post(path, options, postData, isSecure) {
 	verbose('POST', path, postData);
 	return httpPromise(assign({ method: 'POST', path: path }, options), isSecure, postData);
 }
@@ -505,7 +505,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			postData = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), true, postData)
+		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData, true)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
