@@ -6,5 +6,4 @@ IR_HOST=localhost
 IR_PORT=9091
 ROKU_HOST=localhost
 ROKU_PORT=9092
-CA_PATH=ssl/ca.pem
 IS_VERBOSE=true

@@ -79,10 +79,8 @@ const HASS_PREFIX = '/api',
 var express = require('express'),
 	bodyParser = require('body-parser'),
 	http = require('http'),
-	https = require('https'),
 	dotenv = require('dotenv'),
 	parseString = require('xml2js').parseString,
-	fs = require('fs'),
 	server = express();
 
 dotenv.load();
@@ -96,12 +94,7 @@ var port = process.env.LISTEN_PORT,
 	rokuHost = process.env.ROKU_HOST,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
-	httpsHassOptions = {
-		ca: fs.readFileSync(process.env.CA_PATH),
-	},
 	sid;
-
-	httpsHassOptions.agent = new https.Agent(httpsHassOptions);
 
 function assign(target) {
 	for (var i = 1; i < arguments.length; i++) {
@@ -115,9 +108,9 @@ function assign(target) {
 	return target;
 }
 
-function httpPromise(options, isSecure, postData) {
+function httpPromise(options, postData) {
 	return new Promise((resolve, reject) => {
-		var outRequest = (isSecure ? https : http).request(options, outResponse => {
+		var outRequest = http.request(options, outResponse => {
 			var data = '';
 			outResponse.on('data', chunk => data += chunk);
 			outResponse.on('end', () => {
@@ -154,19 +147,19 @@ function xmlParse(s) {
 	});
 }
 
-function get(path, options, isSecure) {
+function get(path, options) {
 	verbose('GET', path);
-	return httpPromise(assign({ method: 'GET', path: path }, options), isSecure);
+	return httpPromise(assign({ method: 'GET', path: path }, options));
 }
 
-function put(path, options, postData, isSecure) {
+function put(path, options, postData) {
 	verbose('PUT', path, postData);
-	return httpPromise(assign({ method: 'PUT', path: path }, options), isSecure, postData);
+	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
 }
 
-function post(path, options, postData, isSecure) {
+function post(path, options, postData) {
 	verbose('POST', path, postData);
-	return httpPromise(assign({ method: 'POST', path: path }, options), isSecure, postData);
+	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
 }
 
 function waitFor(ms) {
@@ -470,7 +463,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 		ROKU
 	];
 
-	get(`${HASS_PREFIX}/states`, getHassOptions(), true)
+	get(`${HASS_PREFIX}/states`, getHassOptions())
 		.then(response => JSON.parse(response.responseText))
 		.then(states => {
 			verbose('states:', states);
@@ -505,7 +498,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			postData = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData, true)
+		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
 				verbose('hassResponse:', hassResponse);
