@@ -444,7 +444,7 @@ function handleRokuRequest(inRequest, inResponse) {
 
 function isStateValid(state) {
 	return state.entity_id
-		&& state.entity_id.startsWith('switch.')
+		&& (state.entity_id.startsWith('switch.') || state.entity_id.startsWith('light.'))
 		&& state.attributes
 		&& state.attributes.friendly_name
 }
@@ -494,7 +494,7 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 		handleRokuRequest(inRequest, inResponse);
 	} else if (isPowerRequest(inRequest)) {
 
-		/* make a request to the z-way server */
+		/* make a request to the hass server */
 		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			postData = JSON.stringify({ entity_id: endpointId });
