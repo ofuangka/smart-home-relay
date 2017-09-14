@@ -273,9 +273,9 @@ function getRokuOptions(postData) {
 }
 
 function getHassOptions(postData) {
-	return assign(getOptions(hassHost, hassPort, postData, {
+	return getOptions(hassHost, hassPort, postData, {
 		'x-ha-access': hassPassword
-	}), httpsHassOptions);
+	});
 }
 
 function getOptions(hostname, port, postData, overrideHeaders) {
