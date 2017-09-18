@@ -1,12 +1,13 @@
-/**
- * this script creates an express server that handles GET requests to /endpoints and 
- * PUT requests to /endpoints/:endpointId/:resource. /endpoints gets relayed as a device list request 
- * on the z-way network, and the device specific PUT request relays the request to the z-way server 
- */
+'use strict';
+
+var result = require('dotenv').config();
+if (result.error) {
+	throw result.error;
+}
 
 const HASS_PREFIX = '/api',
 	DEFAULT_HEADERS = {
-		accept: '*/*',
+		Accept: '*/*',
 		'Content-Type': 'application/json'
 	},
 	TV = {
@@ -16,13 +17,7 @@ const HASS_PREFIX = '/api',
 		description: "Sharp AQUOS N6000U",
 		manufacturer: 'Sharp'
 	},
-	TELEVISION = {
-		id: 'television',
-		type: 'television',
-		name: 'Television',
-		description: "Sharp AQUOS N6000U",
-		manufacturer: 'Sharp'
-	},
+	TELEVISION = Object.assign({}, TV, { id: 'television', name: 'Television' }),
 	ROKU = {
 		id: 'roku',
 		type: 'roku',
@@ -39,7 +34,6 @@ const HASS_PREFIX = '/api',
 		mute: 'KEY_MUTE',
 		input: 'KEY_SWITCHVIDEOMODE',
 		liveTv: 'KEY_TV',
-		warmUp: 'KEY_RED',
 		ok: 'KEY_OK'
 	},
 	ROKU_KEYS = {
@@ -66,8 +60,6 @@ const HASS_PREFIX = '/api',
 		Play: 'play',
 		StartOver: 'home'
 	},
-	PAUSE_MS = 1000,
-	MAX_IR_REPEAT = 50,
 	SUPPORTED_RESOURCES = {
 		power: 'power',
 		channel: 'channel',
@@ -76,14 +68,10 @@ const HASS_PREFIX = '/api',
 		playback: 'playback'
 	};
 
-var express = require('express'),
-	bodyParser = require('body-parser'),
+var bodyParser = require('body-parser'),
 	http = require('http'),
-	dotenv = require('dotenv'),
 	parseString = require('xml2js').parseString,
-	server = express();
-
-dotenv.load();
+	server = require('express')();
 
 var port = process.env.LISTEN_PORT,
 	hassPassword = process.env.HASS_PASSWORD,
@@ -94,26 +82,18 @@ var port = process.env.LISTEN_PORT,
 	rokuHost = process.env.ROKU_HOST,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
-	sid;
-
-function assign(target) {
-	for (var i = 1; i < arguments.length; i++) {
-		var source = arguments[i];
-		for (var nextKey in source) {
-			if (source.hasOwnProperty(nextKey)) {
-				target[nextKey] = source[nextKey];
-			}
-		}
-	}
-	return target;
-}
+	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
+	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
 
 function httpPromise(options, postData) {
+	var startMs = Date.now();
+	verbose(startMs, options.method, options.path, postData);
 	return new Promise((resolve, reject) => {
 		var outRequest = http.request(options, outResponse => {
 			var data = '';
 			outResponse.on('data', chunk => data += chunk);
 			outResponse.on('end', () => {
+				verbose(startMs, options.path, data, `${Date.now() - startMs}ms`);
 				resolve({
 					statusCode: outResponse.statusCode,
 					headers: outResponse.headers,
@@ -121,7 +101,10 @@ function httpPromise(options, postData) {
 				});
 			});
 		});
-		outRequest.on('error', error => reject(error));
+		outRequest.on('error', error => {
+			verbose(startMs, options.path, error, `${Date.now() - startMs}ms`);
+			reject(error);
+		});
 		if (postData !== undefined) {
 			outRequest.write(postData);
 		}
@@ -148,33 +131,28 @@ function xmlParse(s) {
 }
 
 function get(path, options) {
-	verbose('GET', path);
-	return httpPromise(assign({ method: 'GET', path: path }, options));
+	return httpPromise(Object.assign({ method: 'GET', path: path }, options));
 }
 
 function put(path, options, postData) {
-	verbose('PUT', path, postData);
-	return httpPromise(assign({ method: 'PUT', path: path }, options), postData);
+	return httpPromise(Object.assign({ method: 'PUT', path: path }, options), postData);
 }
 
 function post(path, options, postData) {
-	verbose('POST', path, postData);
-	return httpPromise(assign({ method: 'POST', path: path }, options), postData);
+	return httpPromise(Object.assign({ method: 'POST', path: path }, options), postData);
 }
 
 function waitFor(ms) {
-	return new Promise((resolve, reject) => setTimeout(resolve, ms));
+	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function pause() {
-	return waitFor(PAUSE_MS);
+	return waitFor(pauseMs);
 }
 
 function handleTvChannelRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		channel = inRequest.body;
-
-	verbose('channel', channel);
 
 	if (typeof channel.channelCount === 'number') {
 
@@ -184,10 +162,8 @@ function handleTvChannelRequest(inRequest, inResponse) {
 			isoTimestamp: now(),
 			uncertaintyMs: 0
 		});
-		sendIrCommand(TV_KEYS.warmUp, endpointId)
-			.then(irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount)))
-			.then(result => log('channelSuccess', result))
-			.catch(error => log('channelFailure', error));
+		irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount))
+			.catch(log);
 	} else {
 
 		/* TODO: implement */
@@ -214,28 +190,24 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 				throw new Error(`Requested channel not available: ${number}`);
 			}
 		})
-		.catch(error => sendError(inResponse, error));
+		.catch(log);
 }
 
 function handleTvInputRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		input = inRequest.body;
 
-	log('input:', input);
-
 	if (typeof input.name === 'string' && !isNaN(parseInt(input.name))) {
 		var inputId = parseInt(input.name);
 
 		/* just send a success immediately */
 		sendSuccess(inResponse);
-		sendIrCommand(TV_KEYS.warmUp, endpointId)
-			.then(result => sendIrCommand(TV_KEYS.liveTv, endpointId))
+		sendIrCommand(TV_KEYS.liveTv, endpointId)
 			.then(pause)
 			.then(() => irRepeat(TV_KEYS.input, endpointId, inputId))
 			.then(pause)
 			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
-			.then(result => log('inputSuccess', result))
-			.catch(error => log('inputError', error));
+			.catch(log);
 	} else {
 
 		/* TODO: implement */
@@ -279,7 +251,7 @@ function getHassOptions(postData) {
 }
 
 function getOptions(hostname, port, postData, overrideHeaders) {
-	var headers = assign({
+	var headers = Object.assign({
 		'Content-Length': typeof postData === 'string' ? Buffer.byteLength(postData) : 0
 	}, DEFAULT_HEADERS, overrideHeaders);
 	var ret = { headers: headers };
@@ -306,12 +278,10 @@ function isRokuRequest(inRequest) {
 
 function handleTvPowerRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
-		powerState = inRequest.body.state,
-		key = TV_KEYS.power;
+		powerState = inRequest.body.state;
 
-	sendIrCommand(TV_KEYS.warmUp, endpointId)
-		.then(() => sendIrCommand(key, endpointId))
-		.then(irResponse =>
+	sendIrCommand(TV_KEYS.power, endpointId)
+		.then(() =>
 			sendSuccess(inResponse, {
 				state: powerState,
 				isoTimestamp: now(),
@@ -324,9 +294,9 @@ function handleTvPowerRequest(inRequest, inResponse) {
 function sendIrCommand(key, endpointId) {
 
 	/* TODO: don't hardcode the receiverId */
-	var irPath = `/receivers/Sharp/command`,
+	var irPath = `/receivers/Sharp/commands`,
 		postData = JSON.stringify({ key: key });
-	return put(irPath, getIrOptions(postData), postData);
+	return post(irPath, getIrOptions(postData), postData);
 }
 
 function irRepeat(key, endpointId, times) {
@@ -354,14 +324,14 @@ function handleTvVolumeRequest(inRequest, inResponse) {
 	sendSuccess(inResponse);
 
 	if (typeof mute === 'boolean') {
-		sendIrCommand(TV_KEYS.warmUp, endpointId)
-			.then(() => sendIrCommand(TV_KEYS.mute, endpointId));
+		sendIrCommand(TV_KEYS.mute, endpointId)
+			.catch(log);
 	} else if (volumeSteps) {
 		var key = volumeSteps < 0 ? TV_KEYS.volumeDown : TV_KEYS.volumeUp;
-		sendIrCommand(TV_KEYS.warmUp, endpointId)
-			.then(() => irRepeat(key, endpointId, Math.abs(volumeSteps)));
+		irRepeat(key, endpointId, Math.abs(volumeSteps + 1))
+			.catch(log);
 	} else {
-		sendError(inResponse, 'Invalid request');
+		log('Invalid request');
 	}
 }
 
@@ -381,7 +351,7 @@ function getEndpointId(inRequest) {
 	return inRequest.params.endpointId;
 }
 
-function logRequest(inRequest) {
+function logInRequest(inRequest) {
 	verbose('RECV', inRequest.body);
 	log(inRequest.method, inRequest.path);
 }
@@ -442,7 +412,7 @@ function handleRokuRequest(inRequest, inResponse) {
 	}
 }
 
-function isStateValid(state) {
+function isStateZwitch(state) {
 	return state.entity_id
 		&& (state.entity_id.startsWith('switch.') || state.entity_id.startsWith('light.'))
 		&& state.attributes
@@ -454,7 +424,7 @@ server.use(bodyParser.urlencoded({ extended: true }));
 
 /* express get handler */
 server.get('/endpoints', (inRequest, inResponse) => {
-	logRequest(inRequest);
+	logInRequest(inRequest);
 
 	/* static endpoints */
 	var endpoints = [
@@ -465,29 +435,24 @@ server.get('/endpoints', (inRequest, inResponse) => {
 
 	get(`${HASS_PREFIX}/states`, getHassOptions())
 		.then(response => JSON.parse(response.responseText))
-		.then(states => {
-			verbose('states:', states);
-			return states.filter(isStateValid);
-		})
-		.then(binarySwitches => {
-			verbose('binarySwitches:', binarySwitches);
-			binarySwitches.forEach(binarySwitch => endpoints.push({
-				id: binarySwitch.entity_id,
-				type: 'switchBinary',
-				name: binarySwitch.attributes.friendly_name,
-				description: binarySwitch.attributes.friendly_name,
-				manufacturer: binarySwitch.attributes.friendly_name
-			}));
-		})
+		.then(states =>
+			states
+				.filter(isStateZwitch)
+				.forEach(zwitch => endpoints.push({
+					id: zwitch.entity_id,
+					type: 'zwitch',
+					name: zwitch.attributes.friendly_name,
+					description: zwitch.attributes.friendly_name,
+					manufacturer: zwitch.attributes.friendly_name
+				}))
+		)
 		.catch(log)
-		.then(() => {
-			sendSuccess(inResponse, endpoints);
-		});
+		.then(() => sendSuccess(inResponse, endpoints));
 });
 
 /* express put handler */
 server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
-	logRequest(inRequest);
+	logInRequest(inRequest);
 	if (isTvRequest(inRequest)) {
 		handleTvRequest(inRequest, inResponse);
 	} else if (isRokuRequest(inRequest)) {
@@ -495,15 +460,16 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	} else if (isPowerRequest(inRequest)) {
 
 		/* make a request to the hass server */
-		var service = inRequest.body.state === 'on' ? 'turn_on' : 'turn_off',
+		var state = inRequest.body.state,
+			service = state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
+			domain = endpointId.substr(0, endpointId.indexOf('.')),
 			postData = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/switch/${service}`, getHassOptions(postData), postData)
+		post(`${HASS_PREFIX}/services/${domain}/${service}`, getHassOptions(postData), postData)
 			.then(response => JSON.parse(response.responseText))
 			.then(hassResponse => {
-				verbose('hassResponse:', hassResponse);
 				sendSuccess(inResponse, {
-					state: inRequest.body.state,
+					state: state,
 					isoTimestamp: now(),
 					uncertaintyMs: 0
 				});
@@ -518,4 +484,4 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 });
 
 http.createServer(server).listen(port);
-console.log(`Server listening on port ${port}`);
+log(`Server listening on port ${port}`);
