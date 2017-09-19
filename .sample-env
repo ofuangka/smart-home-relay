@@ -1,3 +1,4 @@
+NODE_ENV=development
 LISTEN_PORT=9090
 HASS_HOST=localhost
 HASS_PORT=8083

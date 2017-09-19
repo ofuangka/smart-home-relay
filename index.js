@@ -85,37 +85,32 @@ var port = process.env.LISTEN_PORT,
 	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
 	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
 
-function httpPromise(options, postData) {
+function httpPromise(options, postString) {
 	var startMs = Date.now();
-	verbose(startMs, options.method, options.path, postData);
+	verbose('REQ', options.method, options.path, postString);
 	return new Promise((resolve, reject) => {
-		var outRequest = http.request(options, outResponse => {
+		var request = http.request(options, response => {
 			var data = '';
-			outResponse.on('data', chunk => data += chunk);
-			outResponse.on('end', () => {
-				verbose(startMs, options.path, data, `${Date.now() - startMs}ms`);
-				resolve({
-					statusCode: outResponse.statusCode,
-					headers: outResponse.headers,
-					responseText: data
-				});
+			response.on('data', chunk => data += chunk);
+			response.on('end', () => {
+				if (response.statusCode === 200) {
+					verbose('RESP', options.path, data, `${Date.now() - startMs}ms`);
+					resolve(options.isXml ? xmlParse(data) : JSON.parse(data));
+				} else {
+					log('HTTP', response.statusCode, options.path, data, `${Date.now() - startMs}ms`);
+					reject(new Error(`HTTP ${response.statusCode}`));
+				}
 			});
 		});
-		outRequest.on('error', error => {
-			verbose(startMs, options.path, error, `${Date.now() - startMs}ms`);
+		request.on('error', error => {
+			log('ERR', options.path, error, `${Date.now() - startMs}ms`);
 			reject(error);
 		});
-		if (postData !== undefined) {
-			outRequest.write(postData);
+		if (typeof postString === 'string') {
+			request.write(postString);
 		}
-		outRequest.end();
-	})
-		.then(response => {
-			if (response.statusCode === 200) {
-				return response;
-			}
-			throw new Error(`HTTP statusCode ${response.statusCode}`);
-		});
+		request.end();
+	});
 }
 
 function xmlParse(s) {
@@ -134,12 +129,12 @@ function get(path, options) {
 	return httpPromise(Object.assign({ method: 'GET', path: path }, options));
 }
 
-function put(path, options, postData) {
-	return httpPromise(Object.assign({ method: 'PUT', path: path }, options), postData);
+function put(path, options, postString) {
+	return httpPromise(Object.assign({ method: 'PUT', path: path }, options), postString);
 }
 
-function post(path, options, postData) {
-	return httpPromise(Object.assign({ method: 'POST', path: path }, options), postData);
+function post(path, options, postString) {
+	return httpPromise(Object.assign({ method: 'POST', path: path }, options), postString);
 }
 
 function waitFor(ms) {
@@ -152,65 +147,68 @@ function pause() {
 
 function handleTvChannelRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
-		channel = inRequest.body;
+		delta = inRequest.body.delta;
 
-	if (typeof channel.channelCount === 'number') {
+	if (typeof delta === 'number') {
 
 		/* just send a success immediately */
 		sendSuccess(inResponse, {
-			value: channel,
+			state: 0,
 			isoTimestamp: now(),
 			uncertaintyMs: 0
 		});
-		irRepeat(channel.channelCount < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(channel.channelCount))
+		irRepeat(delta < 0 ? TV_KEYS.channelDown : TV_KEYS.channelUp, endpointId, Math.abs(delta))
 			.catch(log);
 	} else {
-
-		/* TODO: implement */
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
-	var channel = inRequest.body,
-		number = channel.number - 1;
-	sendSuccess(inResponse, {
-		value: channel,
-		isoTimestamp: now(),
-		uncertaintyMs: 0
-	});
-	get('/query/apps', getRokuOptions())
-		.then(response => xmlParse(response.responseText))
-		.then(result => {
-			if (result && result.apps) {
-				var apps = result.apps.app.filter(app => app.$.type === 'appl');
-				if (apps[number]) {
-					return post(`/launch/${apps[number].$.id}`, getRokuOptions());
-				}
-				throw new Error(`Requested channel not available: ${number}`);
-			}
-		})
-		.catch(log);
+	var channel = inRequest.body.channel;
+	if (typeof channel === number) {
+		if (channel > 0) {
+			sendSuccess(inResponse, {
+				state: channel,
+				isoTimestamp: now(),
+				uncertaintyMs: 0
+			});
+			get('/query/apps', getRokuOptions())
+				.then(result => {
+					log(result);
+					result.apps.app.filter(app => app.$.type === 'appl')
+				})
+				.then(apps => post(`/launch/${apps[channel - 1].$.id}`, getRokuOptions()))
+				.then(verbose)
+				.catch(log);
+		} else {
+			sendUnsupportedDeviceOperationError(inRequest, inResponse);
+		}
+	} else {
+		/* TODO: implement */
+		sendUnsupportedDeviceOperationError(inRequest, inResponse);
+	}
 }
 
 function handleTvInputRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
-		input = inRequest.body;
+		input = inRequest.body.input;
 
-	if (typeof input.name === 'string' && !isNaN(parseInt(input.name))) {
-		var inputId = parseInt(input.name);
-
-		/* just send a success immediately */
-		sendSuccess(inResponse);
+	if (typeof input === 'number' && input > 0 && !(input > maxInput)) {
+		sendSuccess(inResponse, {
+			state: input,
+			isoTimestamp: now(),
+			uncertaintyMs: 0
+		});
 		sendIrCommand(TV_KEYS.liveTv, endpointId)
 			.then(pause)
-			.then(() => irRepeat(TV_KEYS.input, endpointId, inputId))
+			.then(() => irRepeat(TV_KEYS.input, endpointId, input))
 			.then(pause)
 			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
 			.catch(log);
 	} else {
 
-		/* TODO: implement */
+		/* TODO: implement input names */
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
 }
@@ -218,9 +216,10 @@ function handleTvInputRequest(inRequest, inResponse) {
 function handleRokuPlaybackRequest(inRequest, inResponse) {
 	var directive = inRequest.body.directive;
 	if (ALEXA_PLAYBACK.hasOwnProperty(directive)) {
+		sendSuccess(inResponse);
 		post(`/keypress/${ROKU_KEYS[ALEXA_PLAYBACK[directive]]}`, getRokuOptions())
-			.then(rokuResponse => sendSuccess(inResponse, rokuResponse))
-			.catch(error => sendError(inResponse, error));
+			.then(log)
+			.catch(log);
 	} else {
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
@@ -236,27 +235,30 @@ function verbose() {
 	}
 }
 
-function getIrOptions(postData) {
-	return getOptions(irHost, irPort, postData);
+function getIrOptions(postString) {
+	return getOptions(irHost, irPort, postString);
 }
 
-function getRokuOptions(postData) {
-	return getOptions(rokuHost, rokuPort, postData);
+function getRokuOptions(postString) {
+	return getOptions(rokuHost, rokuPort, postString, true, undefined);
 }
 
-function getHassOptions(postData) {
-	return getOptions(hassHost, hassPort, postData, {
+function getHassOptions(postString) {
+	return getOptions(hassHost, hassPort, postString, false, {
 		'x-ha-access': hassPassword
 	});
 }
 
-function getOptions(hostname, port, postData, overrideHeaders) {
+function getOptions(hostname, port, postString, isXml, overrideHeaders) {
 	var headers = Object.assign({
-		'Content-Length': typeof postData === 'string' ? Buffer.byteLength(postData) : 0
+		'Content-Length': typeof postString === 'string' ? Buffer.byteLength(postString) : 0
 	}, DEFAULT_HEADERS, overrideHeaders);
 	var ret = { headers: headers };
 	if (hostname && hostname !== 'localhost') {
 		ret.hostname = hostname;
+	}
+	if (isXml) {
+		ret.isXml = isXml;
 	}
 	ret.port = port;
 	return ret;
@@ -280,23 +282,22 @@ function handleTvPowerRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		powerState = inRequest.body.state;
 
+	sendSuccess(inResponse, {
+		state: powerState,
+		isoTimestamp: now(),
+		uncertaintyMs: 0
+	});
+
 	sendIrCommand(TV_KEYS.power, endpointId)
-		.then(() =>
-			sendSuccess(inResponse, {
-				state: powerState,
-				isoTimestamp: now(),
-				uncertaintyMs: 0
-			})
-		)
-		.catch(error => sendError(inResponse, error));
+		.catch(log);
 }
 
 function sendIrCommand(key, endpointId) {
 
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/commands`,
-		postData = JSON.stringify({ key: key });
-	return post(irPath, getIrOptions(postData), postData);
+		postString = JSON.stringify({ key: key });
+	return post(irPath, getIrOptions(postString), postString);
 }
 
 function irRepeat(key, endpointId, times) {
@@ -304,10 +305,10 @@ function irRepeat(key, endpointId, times) {
 		return Promise.resolve();
 	} else if (times === 1) {
 		return sendIrCommand(key, endpointId);
-	} else if (times > MAX_IR_REPEAT) {
+	} else if (times > maxIrRepeat) {
 
 		/* trying to prevent dos */
-		return irRepeat(key, endpointId, MAX_IR_REPEAT);
+		return irRepeat(key, endpointId, maxIrRepeat);
 	} else {
 		return sendIrCommand(key, endpointId)
 			.then(pause)
@@ -316,35 +317,34 @@ function irRepeat(key, endpointId, times) {
 }
 
 function handleTvVolumeRequest(inRequest, inResponse) {
-	var volumeSteps = inRequest.body.volumeSteps,
-		mute = inRequest.body.mute,
-		endpointId = getEndpointId(inRequest);
+	var endpointId = getEndpointId(inRequest),
+		delta = inRequest.body.delta,
+		mute = inRequest.body.mute;
 
-	/* no way to determine status, just return a success */
 	sendSuccess(inResponse);
 
 	if (typeof mute === 'boolean') {
 		sendIrCommand(TV_KEYS.mute, endpointId)
 			.catch(log);
-	} else if (volumeSteps) {
-		var key = volumeSteps < 0 ? TV_KEYS.volumeDown : TV_KEYS.volumeUp;
-		irRepeat(key, endpointId, Math.abs(volumeSteps + 1))
+	} else if (delta) {
+		var key = delta < 0 ? TV_KEYS.volumeDown : TV_KEYS.volumeUp;
+		irRepeat(key, endpointId, Math.abs(delta) + 1)
 			.catch(log);
 	} else {
 		log('Invalid request');
 	}
 }
 
-function sendError(response, error) {
-	var sendData = JSON.stringify({ error: typeof error === 'string' ? new Error(error) : error });
-	verbose('REPLY 500', sendData);
-	response.status(500).send(sendData);
+function sendError(inResponse, error) {
+	var sendString = JSON.stringify(error || { message: 'Failure' });
+	log('REPLY 500', sendString);
+	inResponse.status(500).send(sendString);
 }
 
-function sendSuccess(response, payload) {
-	var sendData = JSON.stringify(payload === undefined ? { code: 200, message: '200 OK' } : payload);
-	verbose('REPLY 200', sendData);
-	response.status(200).send(sendData);
+function sendSuccess(inResponse, payload) {
+	var sendString = JSON.stringify(payload || { message: 'Success' });
+	verbose('REPLY 200', sendString);
+	inResponse.status(200).send(sendString);
 }
 
 function getEndpointId(inRequest) {
@@ -352,8 +352,7 @@ function getEndpointId(inRequest) {
 }
 
 function logInRequest(inRequest) {
-	verbose('RECV', inRequest.body);
-	log(inRequest.method, inRequest.path);
+	log(inRequest.method, inRequest.path, inRequest.body);
 }
 
 function getRequestResource(inRequest) {
@@ -434,7 +433,6 @@ server.get('/endpoints', (inRequest, inResponse) => {
 	];
 
 	get(`${HASS_PREFIX}/states`, getHassOptions())
-		.then(response => JSON.parse(response.responseText))
 		.then(states =>
 			states
 				.filter(isStateZwitch)
@@ -450,8 +448,7 @@ server.get('/endpoints', (inRequest, inResponse) => {
 		.then(() => sendSuccess(inResponse, endpoints));
 });
 
-/* express put handler */
-server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
+server.post('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 	logInRequest(inRequest);
 	if (isTvRequest(inRequest)) {
 		handleTvRequest(inRequest, inResponse);
@@ -464,10 +461,10 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 			service = state === 'on' ? 'turn_on' : 'turn_off',
 			endpointId = getEndpointId(inRequest),
 			domain = endpointId.substr(0, endpointId.indexOf('.')),
-			postData = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/${domain}/${service}`, getHassOptions(postData), postData)
-			.then(response => JSON.parse(response.responseText))
-			.then(hassResponse => {
+			postString = JSON.stringify({ entity_id: endpointId });
+		post(`${HASS_PREFIX}/services/${domain}/${service}`, getHassOptions(postString), postString)
+			.then(result => {
+				verbose(result);
 				sendSuccess(inResponse, {
 					state: state,
 					isoTimestamp: now(),
@@ -475,7 +472,6 @@ server.put('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 				});
 			})
 			.catch(error => {
-				log(error);
 				sendError(inResponse, error);
 			});
 	} else {
