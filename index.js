@@ -165,8 +165,8 @@ function handleTvChannelRequest(inRequest, inResponse) {
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
-	var channel = inRequest.body.channel;
-	if (typeof channel === number) {
+	var channel = parseInt(inRequest.body.channel.number || 0);
+	if (!isNaN(channel)) {
 		if (channel > 0) {
 			sendSuccess(inResponse, {
 				state: channel,
