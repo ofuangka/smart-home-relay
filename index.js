@@ -69,12 +69,12 @@ const HASS_PREFIX = '/api',
 	},
 	TV_INPUTS = {
 		'ANTENNA': 0,
-		'HDMI 1': 2,
-		'HDMI 2': 3,
-		'HDMI 3': 4,
-		'HDMI 4': 5,
-		'COMPOSITE': 6,
-		'COMPONENT': 7
+		'HDMI 1': 1,
+		'HDMI 2': 2,
+		'HDMI 3': 3,
+		'HDMI 4': 4,
+		'COMPOSITE': 5,
+		'COMPONENT': 6
 	};
 
 var bodyParser = require('body-parser'),
@@ -92,6 +92,7 @@ var port = process.env.LISTEN_PORT,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
 	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
+	longPauseMs = parseInt(process.env.LONG_PAUSE_MS || '575'),
 	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
 
 function httpPromise(options, postString) {
@@ -212,9 +213,10 @@ function handleTvInputRequest(inRequest, inResponse) {
 			uncertaintyMs: 0
 		});
 		sendIrCommand(TV_KEYS.liveTv, endpointId)
-			.then(pause)
+			.then(waitFor(longPauseMs))
+			.then(() => sendIrCommand(TV_KEYS.input, endpointId))
+			.then(waitFor(longPauseMs))
 			.then(() => irRepeat(TV_KEYS.input, endpointId, TV_INPUTS[input]))
-			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
 			.catch(log);
 	} else {
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
