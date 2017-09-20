@@ -66,6 +66,15 @@ const HASS_PREFIX = '/api',
 		input: 'input',
 		volume: 'volume',
 		playback: 'playback'
+	},
+	TV_INPUTS = {
+		'ANTENNA': 0,
+		'HDMI 1': 1,
+		'HDMI 2': 2,
+		'HDMI 3': 3,
+		'HDMI 4': 4,
+		'COMPOSITE': 5,
+		'COMPONENT': 6
 	};
 
 var bodyParser = require('body-parser'),
@@ -88,6 +97,7 @@ var port = process.env.LISTEN_PORT,
 function httpPromise(options, postString) {
 	var startMs = Date.now();
 	verbose('REQ', options.method, options.path, postString);
+	options.headers['Content-Length'] = typeof postString === 'string' ? Buffer.byteLength(postString) : 0;
 	return new Promise((resolve, reject) => {
 		var request = http.request(options, response => {
 			var data = '';
@@ -95,7 +105,13 @@ function httpPromise(options, postString) {
 			response.on('end', () => {
 				if (response.statusCode === 200) {
 					verbose('RESP', options.path, data, `${Date.now() - startMs}ms`);
-					resolve(options.isXml ? xmlParse(data) : JSON.parse(data));
+					if (options.headers['Accept'] === 'application/xml') {
+						resolve(xmlParse(data));
+					} else if (options.headers['Accept'] === 'application/json') {
+						resolve(JSON.parse(data));
+					} else {
+						resolve(data);
+					}
 				} else {
 					log('HTTP', response.statusCode, options.path, data, `${Date.now() - startMs}ms`);
 					reject(new Error(`HTTP ${response.statusCode}`));
@@ -127,10 +143,6 @@ function xmlParse(s) {
 
 function get(path, options) {
 	return httpPromise(Object.assign({ method: 'GET', path: path }, options));
-}
-
-function put(path, options, postString) {
-	return httpPromise(Object.assign({ method: 'PUT', path: path }, options), postString);
 }
 
 function post(path, options, postString) {
@@ -165,7 +177,7 @@ function handleTvChannelRequest(inRequest, inResponse) {
 }
 
 function handleRokuChannelRequest(inRequest, inResponse) {
-	var channel = parseInt(inRequest.body.channel.number || 0);
+	var channel = parseInt(inRequest.body.number || 0);
 	if (!isNaN(channel)) {
 		if (channel > 0) {
 			sendSuccess(inResponse, {
@@ -178,14 +190,13 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 					log(result);
 					result.apps.app.filter(app => app.$.type === 'appl')
 				})
-				.then(apps => post(`/launch/${apps[channel - 1].$.id}`, getRokuOptions()))
+				.then(apps => post(`/launch/${apps[(channel - 1) % apps.length].$.id}`, getRokuOptions()))
 				.then(verbose)
 				.catch(log);
 		} else {
 			sendUnsupportedDeviceOperationError(inRequest, inResponse);
 		}
 	} else {
-		/* TODO: implement */
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
 }
@@ -194,7 +205,7 @@ function handleTvInputRequest(inRequest, inResponse) {
 	var endpointId = getEndpointId(inRequest),
 		input = inRequest.body.input;
 
-	if (typeof input === 'number' && input > 0 && !(input > maxInput)) {
+	if (TV_INPUTS.hasOwnProperty(input)) {
 		sendSuccess(inResponse, {
 			state: input,
 			isoTimestamp: now(),
@@ -202,13 +213,11 @@ function handleTvInputRequest(inRequest, inResponse) {
 		});
 		sendIrCommand(TV_KEYS.liveTv, endpointId)
 			.then(pause)
-			.then(() => irRepeat(TV_KEYS.input, endpointId, input))
+			.then(() => irRepeat(TV_KEYS.input, endpointId, TV_INPUTS[input]))
 			.then(pause)
 			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
 			.catch(log);
 	} else {
-
-		/* TODO: implement input names */
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
 	}
 }
@@ -235,40 +244,36 @@ function verbose() {
 	}
 }
 
-function getIrOptions(postString) {
-	return getOptions(irHost, irPort, postString);
-}
-
-function getRokuOptions(postString) {
-	return getOptions(rokuHost, rokuPort, postString, true, undefined);
-}
-
-function getHassOptions(postString) {
-	return getOptions(hassHost, hassPort, postString, false, {
-		'x-ha-access': hassPassword
-	});
-}
-
-function getOptions(hostname, port, postString, isXml, overrideHeaders) {
-	var headers = Object.assign({
-		'Content-Length': typeof postString === 'string' ? Buffer.byteLength(postString) : 0
-	}, DEFAULT_HEADERS, overrideHeaders);
-	var ret = { headers: headers };
-	if (hostname && hostname !== 'localhost') {
-		ret.hostname = hostname;
-	}
-	if (isXml) {
-		ret.isXml = isXml;
-	}
-	ret.port = port;
+function getIrOptions() {
+	var ret = getOptions(irHost, irPort);
+	ret.headers['Accept'] = 'application/json';
 	return ret;
 }
 
-/**
- * Checks if the request is for TV
- * 
- * @param {object} inRequest 
- */
+function getRokuOptions() {
+	var ret = getOptions(rokuHost, rokuPort);
+	ret.headers['Accept'] = 'application/xml';
+	return ret;
+}
+
+function getHassOptions() {
+	var ret = getOptions(hassHost, hassPort);
+	ret.headers['Accept'] = 'application/json';
+	ret.headers['x-ha-access'] = hassPassword;
+	return ret;
+}
+
+function getOptions(hostname, port) {
+	var ret = {
+		headers: Object.assign({}, DEFAULT_HEADERS),
+		port: port
+	};
+	if (hostname && hostname !== 'localhost') {
+		ret.hostname = hostname;
+	}
+	return ret;
+}
+
 function isTvRequest(inRequest) {
 	var endpointId = getEndpointId(inRequest);
 	return [TV.id, TELEVISION.id].indexOf(endpointId) !== -1;
