@@ -92,8 +92,7 @@ var port = process.env.LISTEN_PORT,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
 	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
-	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50'),
-	longPauseMs = parseInt(process.env.LONG_PAUSE_MS || '750');
+	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
 
 function httpPromise(options, postString) {
 	var startMs = Date.now();
@@ -213,9 +212,8 @@ function handleTvInputRequest(inRequest, inResponse) {
 			uncertaintyMs: 0
 		});
 		sendIrCommand(TV_KEYS.liveTv, endpointId)
-			.then(waitFor(longPauseMs))
-			.then(() => irRepeat(TV_KEYS.input, endpointId, TV_INPUTS[input]))
 			.then(pause)
+			.then(() => irRepeat(TV_KEYS.input, endpointId, TV_INPUTS[input]))
 			.then(() => sendIrCommand(TV_KEYS.ok, endpointId))
 			.catch(log);
 	} else {
@@ -317,7 +315,6 @@ function irRepeat(key, endpointId, times) {
 		return irRepeat(key, endpointId, maxIrRepeat);
 	} else {
 		return sendIrCommand(key, endpointId)
-			.then(pause)
 			.then(() => irRepeat(key, endpointId, times - 1));
 	}
 }
