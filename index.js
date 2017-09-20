@@ -314,7 +314,7 @@ function irRepeat(key, endpointId, times) {
 	} else if (times > maxIrRepeat) {
 
 		/* trying to prevent dos */
-		return irRepeat(key, endpointId, maxIrRepeat);
+		return irRepeat(key, endpointId, maxIrRepeat).then(pause);
 	} else {
 		return sendIrCommand(key, endpointId)
 			.then(() => irRepeat(key, endpointId, times - 1));
