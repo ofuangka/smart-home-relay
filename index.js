@@ -213,9 +213,9 @@ function handleTvInputRequest(inRequest, inResponse) {
 			uncertaintyMs: 0
 		});
 		sendIrCommand(TV_KEYS.liveTv, endpointId)
-			.then(waitFor(longPauseMs))
+			.then(() => waitFor(longPauseMs))
 			.then(() => sendIrCommand(TV_KEYS.input, endpointId))
-			.then(waitFor(longPauseMs))
+			.then(() => waitFor(longPauseMs))
 			.then(() => irRepeat(TV_KEYS.input, endpointId, TV_INPUTS[input]))
 			.catch(log);
 	} else {
