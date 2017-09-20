@@ -92,7 +92,7 @@ var port = process.env.LISTEN_PORT,
 	rokuPort = process.env.ROKU_PORT,
 	isVerbose = process.env.IS_VERBOSE,
 	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
-	longPauseMs = parseInt(process.env.LONG_PAUSE_MS || '575'),
+	longPauseMs = parseInt(process.env.LONG_PAUSE_MS || '775'),
 	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
 
 function httpPromise(options, postString) {
@@ -303,7 +303,7 @@ function sendIrCommand(key, endpointId) {
 	/* TODO: don't hardcode the receiverId */
 	var irPath = `/receivers/Sharp/commands`,
 		postString = JSON.stringify({ key: key });
-	return post(irPath, getIrOptions(postString), postString);
+	return post(irPath, getIrOptions(), postString);
 }
 
 function irRepeat(key, endpointId, times) {
@@ -467,7 +467,7 @@ server.post('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 			endpointId = getEndpointId(inRequest),
 			domain = endpointId.substr(0, endpointId.indexOf('.')),
 			postString = JSON.stringify({ entity_id: endpointId });
-		post(`${HASS_PREFIX}/services/${domain}/${service}`, getHassOptions(postString), postString)
+		post(`${HASS_PREFIX}/services/${domain}/${service}`, getHassOptions(), postString)
 			.then(result => {
 				verbose(result);
 				sendSuccess(inResponse, {
