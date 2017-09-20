@@ -69,12 +69,12 @@ const HASS_PREFIX = '/api',
 	},
 	TV_INPUTS = {
 		'ANTENNA': 0,
-		'HDMI 1': 1,
-		'HDMI 2': 2,
-		'HDMI 3': 3,
-		'HDMI 4': 4,
-		'COMPOSITE': 5,
-		'COMPONENT': 6
+		'HDMI 1': 2,
+		'HDMI 2': 3,
+		'HDMI 3': 4,
+		'HDMI 4': 5,
+		'COMPOSITE': 6,
+		'COMPONENT': 7
 	};
 
 var bodyParser = require('body-parser'),
