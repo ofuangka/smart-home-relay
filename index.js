@@ -189,7 +189,7 @@ function handleRokuChannelRequest(inRequest, inResponse) {
 			get('/query/apps', getRokuOptions())
 				.then(result => {
 					log(result);
-					result.apps.app.filter(app => app.$.type === 'appl')
+					return result.apps.app.filter(app => app.$.type === 'appl');
 				})
 				.then(apps => post(`/launch/${apps[(channel - 1) % apps.length].$.id}`, getRokuOptions()))
 				.then(verbose)
