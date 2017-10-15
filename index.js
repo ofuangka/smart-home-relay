@@ -93,7 +93,8 @@ var port = process.env.LISTEN_PORT,
 	isVerbose = process.env.IS_VERBOSE,
 	pauseMs = parseInt(process.env.PAUSE_MS || '375'),
 	longPauseMs = parseInt(process.env.LONG_PAUSE_MS || '775'),
-	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50');
+	maxIrRepeat = parseInt(process.env.MAX_IR_REPEAT || '50'),
+	fallbackRedirectUrl = process.env.FALLBACK_REDIRECT_URL;
 
 function httpPromise(options, postString) {
 	var startMs = Date.now();
@@ -481,6 +482,15 @@ server.post('/endpoints/:endpointId/:resourceId', (inRequest, inResponse) => {
 			});
 	} else {
 		sendUnsupportedDeviceOperationError(inRequest, inResponse);
+	}
+});
+
+server.use((inRequest, inResponse) => {
+	if (fallbackRedirectUrl) {
+		inResponse.redirect(fallbackRedirectUrl);
+	}
+	else {
+		inResponse.send(404);
 	}
 });
 
